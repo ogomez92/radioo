@@ -1,0 +1,15 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(node node_modules/electron/in1)",
+      "Bash(pnpm dev:*)",
+      "Bash(pnpm run:*)",
+      "Bash(tasklist //FI \"IMAGENAME eq electron.exe\")",
+      "Bash(pnpm check:*)",
+      "Bash(curl -sS -m 5 -o /dev/null -w \"http %{http_code}\\\\n\" http://oriolgomez.com:8000/)",
+      "Bash(curl -sS -m 5 -o /dev/null -w \"http radio %{http_code}\\\\n\" http://radio.oriolgomez.com:8000/)",
+      "Bash(curl -sSk -m 5 -o /dev/null -w \"https radio %{http_code}\\\\n\" https://radio.oriolgomez.com/)",
+      "Bash(pnpm exec:*)"
+    ]
+  }
+}
