@@ -1,5 +1,6 @@
 <script lang="ts">
   import { store } from '../stores/app-store.svelte';
+  import { i18n } from '../i18n/i18n.svelte';
   import VuMeter from './VuMeter.svelte';
 
   let {
@@ -31,11 +32,11 @@
 </script>
 
 <section class="panel" aria-labelledby="mixer-heading">
-  <h2 id="mixer-heading">Mixer</h2>
+  <h2 id="mixer-heading">{i18n.t('mixer.heading')}</h2>
 
   <div class="col gap-sm">
     <div class="row gap-md">
-      <label for="master-gain" style="min-width: 52px">Master</label>
+      <label for="master-gain" style="min-width: 52px">{i18n.t('mixer.master')}</label>
       <input
         id="master-gain"
         type="range"
@@ -44,26 +45,26 @@
         step="0.01"
         value={store.masterGain}
         oninput={handleMaster}
-        aria-label="Master output gain"
+        aria-label={i18n.t('mixer.masterAria')}
       />
       <span class="text-sm text-muted" style="min-width: 36px">{Math.round(store.masterGain * 100)}%</span>
     </div>
 
-    <VuMeter level={store.masterLevelL} label="Master output level" />
+    <VuMeter level={store.masterLevelL} label={i18n.t('mixer.masterLevel')} />
   </div>
 
   <div class="ducking-section" style="margin-top: 16px">
-    <h2 id="ducking-heading">Ducking</h2>
+    <h2 id="ducking-heading">{i18n.t('mixer.ducking')}</h2>
 
     <div class="row gap-md">
       <label class="row gap-sm" style="cursor: pointer">
         <input type="checkbox" checked={store.duckingEnabled} onchange={handleDuckToggle} />
-        Auto-duck music <kbd>Ctrl+D</kbd>
+        {i18n.t('mixer.autoDuckMusic')} <kbd>Ctrl+D</kbd>
       </label>
     </div>
 
     <div class="row gap-md" style="margin-top: 8px">
-      <label for="duck-amount" style="min-width: 52px">Amount</label>
+      <label for="duck-amount" style="min-width: 52px">{i18n.t('mixer.amount')}</label>
       <input
         id="duck-amount"
         type="range"
@@ -73,13 +74,13 @@
         value={store.duckAmount}
         oninput={handleDuckAmount}
         disabled={!store.duckingEnabled}
-        aria-label="Duck amount — how much to reduce music when speaking"
+        aria-label={i18n.t('mixer.amountAria')}
       />
       <span class="text-sm text-muted" style="min-width: 36px">{Math.round(store.duckAmount * 100)}%</span>
     </div>
 
     <p class="text-sm text-muted" style="margin-top: 4px">
-      Hold <kbd>Ctrl+Shift+D</kbd> to manually duck music
+      {@html i18n.t('mixer.manualDuckHint', { key: '<kbd>Ctrl+Shift+D</kbd>' })}
     </p>
   </div>
 </section>

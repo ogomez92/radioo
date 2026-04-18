@@ -2,6 +2,7 @@
   import { onMount, onDestroy } from 'svelte';
   import { AudioEngine } from './lib/audio/engine';
   import { store } from './lib/stores/app-store.svelte';
+  import { i18n } from './lib/i18n/i18n.svelte';
   import type { MicEffects } from './lib/types';
   import DeviceSelector from './lib/components/DeviceSelector.svelte';
   import EffectsPanel from './lib/components/EffectsPanel.svelte';
@@ -10,6 +11,7 @@
   import ServerPanel from './lib/components/ServerPanel.svelte';
   import RecordingPanel from './lib/components/RecordingPanel.svelte';
   import StatusBar from './lib/components/StatusBar.svelte';
+  import SettingsPanel from './lib/components/SettingsPanel.svelte';
   import './app.css';
 
   let engine: AudioEngine | null = null;
@@ -18,16 +20,26 @@
   let removeShortcutListener: (() => void) | null = null;
   let momentaryDuckActive = false;
   let muteAnnouncement = $state('');
+  let wasConnected = false;
 
-  type TabId = 'main' | 'server' | 'recording' | 'effects';
+  // Single hook: any disconnect (manual, icecast drop, error) flips store.connected
+  // from true → false. Play a 1s local beep so the operator is alerted.
+  $effect(() => {
+    const connected = store.connected;
+    if (wasConnected && !connected) engine?.playDisconnectBeep();
+    wasConnected = connected;
+  });
+
+  type TabId = 'main' | 'server' | 'recording' | 'effects' | 'settings';
   let activeTab = $state<TabId>('main');
 
-  const tabs: { id: TabId; label: string }[] = [
-    { id: 'main', label: 'Main' },
-    { id: 'server', label: 'Server' },
-    { id: 'recording', label: 'Recording' },
-    { id: 'effects', label: 'Effects' },
-  ];
+  const tabs = $derived<{ id: TabId; label: string }[]>([
+    { id: 'main', label: i18n.t('tabs.main') },
+    { id: 'server', label: i18n.t('tabs.server') },
+    { id: 'recording', label: i18n.t('tabs.recording') },
+    { id: 'effects', label: i18n.t('tabs.effects') },
+    { id: 'settings', label: i18n.t('tabs.settings') },
+  ]);
 
   function handleTabKeydown(e: KeyboardEvent) {
     const idx = tabs.findIndex((t) => t.id === activeTab);
@@ -44,12 +56,19 @@
 
   onMount(async () => {
     engine = new AudioEngine();
-    await engine.init((pcm: Float32Array) => {
-      window.api?.sendAudioData(pcm.buffer as ArrayBuffer);
-    });
+    try {
+      await engine.init((pcm: Float32Array) => {
+        window.api?.sendAudioData(pcm.buffer as ArrayBuffer);
+      });
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      store.error = `Audio engine init failed: ${msg}`;
+      console.error('[radioo] engine.init failed', err);
+      return;
+    }
     engine.setMusicEndedCallback(() => {
       store.musicPlaying = false;
-      announce('Music finished');
+      announce(i18n.t('announce.musicFinished'));
     });
 
     meterInterval = setInterval(() => {
@@ -66,7 +85,7 @@
         if (dur > 16 && remaining > 0 && remaining <= 15) {
           musicWarningFired = true;
           engine.playWarningBeep();
-          announce('Music ending soon');
+          announce(i18n.t('announce.musicEndingSoon'));
         }
       }
     }, 50);
@@ -84,6 +103,7 @@
 
     const saved = await window.api?.loadSettings();
     if (saved) store.loadSettings(saved as Record<string, unknown>);
+    i18n.setLang(store.language);
     settingsLoaded = true;
 
     // Apply saved audio settings
@@ -253,13 +273,13 @@
   function toggleMicMute(): void {
     store.micMuted = !store.micMuted;
     engine?.setMicMuted(store.micMuted);
-    announce(store.micMuted ? 'Microphone muted' : 'Microphone unmuted');
+    announce(store.micMuted ? i18n.t('announce.micMuted') : i18n.t('announce.micUnmuted'));
   }
 
   function toggleSysMute(): void {
     store.sysAudioMuted = !store.sysAudioMuted;
     engine?.setSysMuted(store.sysAudioMuted);
-    announce(store.sysAudioMuted ? 'System audio muted' : 'System audio unmuted');
+    announce(store.sysAudioMuted ? i18n.t('announce.sysMuted') : i18n.t('announce.sysUnmuted'));
   }
 
   async function onMicChange(deviceId: string): Promise<void> {
@@ -267,7 +287,7 @@
       await engine?.setMicDevice(deviceId);
       store.error = null;
     } catch (err) {
-      store.error = `Mic error: ${err instanceof Error ? err.message : err}`;
+      store.error = i18n.t('errors.micError', { msg: err instanceof Error ? err.message : String(err) });
     }
   }
 
@@ -281,7 +301,7 @@
       store.error = null;
     } catch (err) {
       store.sysAudioEnabled = false;
-      store.error = `System audio error: ${err instanceof Error ? err.message : err}`;
+      store.error = i18n.t('errors.sysError', { msg: err instanceof Error ? err.message : String(err) });
     }
   }
 
@@ -291,10 +311,10 @@
 
   async function loadImpulseResponse(): Promise<void> {
     const result = await window.api?.showOpenDialog({
-      title: 'Load Impulse Response',
+      title: i18n.t('dialogs.loadIrTitle'),
       filters: [
-        { name: 'Audio Files', extensions: ['wav', 'aiff', 'aif', 'flac', 'ogg', 'mp3'] },
-        { name: 'All Files', extensions: ['*'] },
+        { name: i18n.t('dialogs.audioFiles'), extensions: ['wav', 'aiff', 'aif', 'flac', 'ogg', 'mp3'] },
+        { name: i18n.t('dialogs.allFiles'), extensions: ['*'] },
       ],
       properties: ['openFile'],
     });
@@ -311,7 +331,7 @@
         saveSettings();
       }
     } catch (err) {
-      store.error = `IR load error: ${err instanceof Error ? err.message : err}`;
+      store.error = i18n.t('errors.irLoad', { msg: err instanceof Error ? err.message : String(err) });
     }
   }
 
@@ -324,10 +344,10 @@
 
   async function loadMusicFile(): Promise<void> {
     const result = await window.api?.showOpenDialog({
-      title: 'Open Audio File',
+      title: i18n.t('dialogs.openAudioTitle'),
       filters: [
-        { name: 'Audio Files', extensions: ['mp3', 'ogg', 'opus', 'wav', 'flac', 'aac', 'm4a'] },
-        { name: 'All Files', extensions: ['*'] },
+        { name: i18n.t('dialogs.audioFiles'), extensions: ['mp3', 'ogg', 'opus', 'wav', 'flac', 'aac', 'm4a'] },
+        { name: i18n.t('dialogs.allFiles'), extensions: ['*'] },
       ],
       properties: ['openFile'],
     });
@@ -342,10 +362,10 @@
         store.musicFilePath = filePath;
         store.musicFileName = filePath.split(/[\\/]/).pop() ?? filePath;
         store.musicPlaying = false;
-        announce(`Loaded ${store.musicFileName}`);
+        announce(i18n.t('announce.musicLoaded', { name: store.musicFileName }));
       }
     } catch (err) {
-      store.error = `Music load error: ${err instanceof Error ? err.message : err}`;
+      store.error = i18n.t('errors.musicLoad', { msg: err instanceof Error ? err.message : String(err) });
     }
   }
 
@@ -354,11 +374,20 @@
     if (store.musicPlaying) {
       engine.pauseMusic();
       store.musicPlaying = false;
-      announce('Music paused');
+      announce(i18n.t('announce.musicPaused'));
     } else {
       engine.playMusic();
       store.musicPlaying = engine.musicIsPlaying;
-      if (store.musicPlaying) announce('Music playing');
+      if (store.musicPlaying) {
+        // Auto-mute system audio if the setting is on. Only fires on the
+        // play transition — user can still unmute mid-playback, and we never
+        // unmute automatically when the track ends.
+        if (store.muteSysWhileMusicPlaying && !store.sysAudioMuted) {
+          store.sysAudioMuted = true;
+          engine.setSysMuted(true);
+        }
+        announce(i18n.t('announce.musicPlaying'));
+      }
     }
   }
 
@@ -369,12 +398,12 @@
   function adjustMusicVolume(delta: number): void {
     const next = Math.max(0, Math.min(100, store.musicVolume + delta));
     if (next === store.musicVolume) {
-      announce(`Music volume ${next}%`);
+      announce(i18n.t('announce.musicVolume', { percent: next }));
       return;
     }
     store.musicVolume = next;
     engine?.setMusicVolume(next / 100);
-    announce(`Music volume ${next}%`);
+    announce(i18n.t('announce.musicVolume', { percent: next }));
   }
 
   function formatHms(seconds: number): string {
@@ -387,18 +416,18 @@
 
   function announceMusicProgress(): void {
     if (!engine || !store.musicFileName) {
-      announce('No music file loaded');
+      announce(i18n.t('announce.noMusicFile'));
       return;
     }
     const duration = engine.getMusicDuration();
     if (duration <= 0) {
-      announce('No music file loaded');
+      announce(i18n.t('announce.noMusicFile'));
       return;
     }
     const position = engine.getMusicPosition();
     const percent = Math.round((position / duration) * 100);
     const remaining = duration - position;
-    announce(`${percent}%, ${formatHms(remaining)} remaining`);
+    announce(i18n.t('announce.musicProgress', { percent, time: formatHms(remaining) }));
   }
 
   // Fire a single warning beep when music has ~15s left.
@@ -414,19 +443,19 @@
     store.error = null;
 
     if (!store.streamUrl) {
-      store.error = 'No server URL configured — set it on the Server tab';
+      store.error = i18n.t('errors.noUrl');
       return;
     }
 
     try {
       new URL(store.streamUrl);
     } catch {
-      store.error = `Invalid server URL: "${store.streamUrl}" — expected http(s)://host:port/mount`;
+      store.error = i18n.t('errors.invalidUrl', { url: store.streamUrl });
       return;
     }
 
     if (!store.streamPassword) {
-      store.error = 'No password configured — set it on the Server tab';
+      store.error = i18n.t('errors.noPassword');
       return;
     }
 
@@ -453,7 +482,7 @@
     }
 
     if (!result?.success) {
-      store.error = result?.error ?? 'Connection failed — check server settings';
+      store.error = result?.error ?? i18n.t('errors.connectionFailed');
       await window.api?.stopEncoder();
       engine.setCaptureActive(false);
       return;
@@ -483,11 +512,11 @@
 
   async function startRecording(): Promise<void> {
     const result = await window.api?.showSaveDialog({
-      title: 'Save Recording',
+      title: i18n.t('dialogs.saveRecordingTitle'),
       defaultPath: `recording-${Date.now()}.${store.streamFormat}`,
       filters: [
-        { name: 'Audio', extensions: [store.streamFormat] },
-        { name: 'All Files', extensions: ['*'] },
+        { name: i18n.t('dialogs.audio'), extensions: [store.streamFormat] },
+        { name: i18n.t('dialogs.allFiles'), extensions: ['*'] },
       ],
     });
 
@@ -549,15 +578,15 @@
     const s = store.streaming;
     const r = store.recording;
     if (c !== prevConnected) {
-      announce(c ? 'Connected to server' : 'Disconnected from server');
+      announce(c ? i18n.t('announce.connected') : i18n.t('announce.disconnected'));
       prevConnected = c;
     }
     if (s !== prevStreaming) {
-      announce(s ? 'Streaming started' : 'Streaming stopped');
+      announce(s ? i18n.t('announce.streamStarted') : i18n.t('announce.streamStopped'));
       prevStreaming = s;
     }
     if (r !== prevRecording) {
-      announce(r ? 'Recording started' : 'Recording stopped');
+      announce(r ? i18n.t('announce.recStarted') : i18n.t('announce.recStopped'));
       prevRecording = r;
     }
   });
@@ -581,14 +610,14 @@
         silenceTimer = setTimeout(() => {
           micSilent = true;
           silenceTimer = null;
-          announce('No microphone input detected');
+          announce(i18n.t('announce.noMicInput'));
         }, SILENCE_DELAY_MS);
       }
     } else {
       if (silenceTimer) { clearTimeout(silenceTimer); silenceTimer = null; }
       if (micSilent) {
         micSilent = false;
-        announce('Microphone input detected');
+        announce(i18n.t('announce.micInputDetected'));
       }
     }
   });
@@ -607,11 +636,11 @@
 </script>
 
 <header class="app-header">
-  <h1>WebIce</h1>
+  <h1>{i18n.t('app.title')}</h1>
   {#if store.streaming}
     <span class="row gap-sm">
-      <span class="status-dot live" aria-label="Live"></span>
-      <strong>LIVE</strong>
+      <span class="status-dot live" aria-label={i18n.t('status.live')}></span>
+      <strong>{i18n.t('app.live')}</strong>
       <span class="text-muted" aria-hidden="true">{store.durationFormatted}</span>
     </span>
   {/if}
@@ -638,7 +667,6 @@
     id="panel-main"
     role="tabpanel"
     aria-labelledby="tab-main"
-    tabindex="0"
     class="tab-panel"
     hidden={activeTab !== 'main'}
   >
@@ -662,14 +690,14 @@
       onAnnounceProgress={announceMusicProgress}
     />
 
-    <section class="panel" aria-label="Transport controls">
+    <section class="panel" aria-label={i18n.t('transport.aria')}>
       <div class="actions row gap-md">
         <button
           class="btn-icon-lg"
           class:muted={store.micMuted}
           onclick={toggleMicMute}
-          aria-label={store.micMuted ? 'Unmute microphone (Ctrl+M)' : 'Mute microphone (Ctrl+M)'}
-          title="Mic mute (Ctrl+M)"
+          aria-label={store.micMuted ? i18n.t('transport.unmuteMic', { key: 'Ctrl+M' }) : i18n.t('transport.muteMic', { key: 'Ctrl+M' })}
+          title={i18n.t('transport.muteMic', { key: 'Ctrl+M' })}
         >
           {store.micMuted ? '🔇' : '🎤'}
         </button>
@@ -679,57 +707,57 @@
           class:muted={store.sysAudioMuted}
           onclick={toggleSysMute}
           disabled={!store.sysAudioEnabled}
-          aria-label={store.sysAudioMuted ? 'Unmute system audio (Ctrl+Shift+M)' : 'Mute system audio (Ctrl+Shift+M)'}
-          title="System audio mute (Ctrl+Shift+M)"
+          aria-label={store.sysAudioMuted ? i18n.t('transport.unmuteSys', { key: 'Ctrl+Shift+M' }) : i18n.t('transport.muteSys', { key: 'Ctrl+Shift+M' })}
+          title={i18n.t('transport.muteSys', { key: 'Ctrl+Shift+M' })}
         >
           {store.sysAudioMuted ? '🔇' : '🔊'}
         </button>
 
         {#if store.streaming}
-          <button class="btn-danger" onclick={stopStream} aria-label="Stop streaming">
-            <span class="status-dot live" aria-hidden="true"></span> Stop Stream
+          <button class="btn-danger" onclick={stopStream} aria-label={i18n.t('transport.stopStreamAria')}>
+            <span class="status-dot live" aria-hidden="true"></span> {i18n.t('transport.stopStream')}
           </button>
         {:else}
           <button
             class="btn-primary"
             onclick={startStream}
             disabled={!canStream}
-            aria-label="Start streaming to Icecast"
+            aria-label={i18n.t('transport.startStreamAria')}
           >
-            Start Stream <kbd>Ctrl+S</kbd>
+            {i18n.t('transport.startStream')} <kbd>Ctrl+S</kbd>
           </button>
         {/if}
 
         {#if store.recording}
-          <button class="btn-danger" onclick={stopRecording} aria-label="Stop recording">
-            <span class="status-dot live" aria-hidden="true"></span> Stop Rec
+          <button class="btn-danger" onclick={stopRecording} aria-label={i18n.t('transport.stopRecordingAria')}>
+            <span class="status-dot live" aria-hidden="true"></span> {i18n.t('transport.stopRec')}
           </button>
         {:else}
-          <button class="btn-outline" onclick={startRecording} aria-label="Start recording to file">
-            Record <kbd>Ctrl+R</kbd>
+          <button class="btn-outline" onclick={startRecording} aria-label={i18n.t('transport.startRecordingAria')}>
+            {i18n.t('transport.record')} <kbd>Ctrl+R</kbd>
           </button>
         {/if}
 
         {#if store.hlsEnabled}
           {#if store.hlsActive}
-            <button class="btn-danger" onclick={stopHls} aria-label="Stop HLS output">
-              Stop HLS
+            <button class="btn-danger" onclick={stopHls} aria-label={i18n.t('transport.stopHlsAria')}>
+              {i18n.t('transport.stopHls')}
             </button>
           {:else}
             <button
               class="btn-outline"
               onclick={startHls}
               disabled={!store.hlsPath}
-              aria-label="Start HLS output"
+              aria-label={i18n.t('transport.startHlsAria')}
             >
-              Start HLS
+              {i18n.t('transport.startHls')}
             </button>
           {/if}
         {/if}
 
         {#if store.streaming && store.listeners >= 0}
           <span class="listeners text-sm" aria-live="polite">
-            Listeners: <strong>{store.listeners}</strong>
+            {i18n.t('transport.listeners', { count: store.listeners })}
           </span>
         {/if}
       </div>
@@ -740,7 +768,6 @@
     id="panel-server"
     role="tabpanel"
     aria-labelledby="tab-server"
-    tabindex="0"
     class="tab-panel"
     hidden={activeTab !== 'server'}
   >
@@ -751,7 +778,6 @@
     id="panel-recording"
     role="tabpanel"
     aria-labelledby="tab-recording"
-    tabindex="0"
     class="tab-panel"
     hidden={activeTab !== 'recording'}
   >
@@ -762,11 +788,20 @@
     id="panel-effects"
     role="tabpanel"
     aria-labelledby="tab-effects"
-    tabindex="0"
     class="tab-panel"
     hidden={activeTab !== 'effects'}
   >
     <EffectsPanel {onEffectsChange} onLoadImpulse={loadImpulseResponse} onClearImpulse={clearImpulseResponse} />
+  </div>
+
+  <div
+    id="panel-settings"
+    role="tabpanel"
+    aria-labelledby="tab-settings"
+    class="tab-panel"
+    hidden={activeTab !== 'settings'}
+  >
+    <SettingsPanel />
   </div>
 
   <div class="sr-only" role="status" aria-live="assertive" aria-atomic="true">

@@ -21,7 +21,7 @@ function createWindow(): void {
       nodeIntegration: false,
       sandbox: false,
     },
-    title: 'WebIce',
+    title: 'Radioo',
     show: false,
   });
 

@@ -36,6 +36,7 @@ class AppStore {
   musicFileName = $state('');
   musicVolume = $state(100); // 0–100 integer
   musicPlaying = $state(false);
+  muteSysWhileMusicPlaying = $state(false);
 
   // Server profiles
   serverProfiles = $state<ServerProfile[]>([]);
@@ -47,11 +48,14 @@ class AppStore {
   streamPassword = $state('');
   streamFormat = $state<StreamFormat>('mp3');
   streamBitrate = $state(192);
-  streamName = $state('WebIce Stream');
+  streamName = $state('Radioo Stream');
 
   // HLS config
   hlsEnabled = $state(false);
   hlsPath = $state('');
+
+  // UI
+  language = $state<'en' | 'es' | 'fr' | 'it' | 'pt' | 'de' | 'ja'>('en');
 
   // Status
   streaming = $state(false);
@@ -137,6 +141,8 @@ class AppStore {
       musicVolume: this.musicVolume,
       micMuted: this.micMuted,
       sysAudioMuted: this.sysAudioMuted,
+      language: this.language,
+      muteSysWhileMusicPlaying: this.muteSysWhileMusicPlaying,
     };
   }
 
@@ -167,6 +173,10 @@ class AppStore {
     if (typeof s.musicVolume === 'number') this.musicVolume = s.musicVolume;
     if (typeof s.micMuted === 'boolean') this.micMuted = s.micMuted;
     if (typeof s.sysAudioMuted === 'boolean') this.sysAudioMuted = s.sysAudioMuted;
+    if (typeof s.language === 'string' && ['en','es','fr','it','pt','de','ja'].includes(s.language)) {
+      this.language = s.language as typeof this.language;
+    }
+    if (typeof s.muteSysWhileMusicPlaying === 'boolean') this.muteSysWhileMusicPlaying = s.muteSysWhileMusicPlaying;
   }
 
   get durationFormatted(): string {

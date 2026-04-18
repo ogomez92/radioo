@@ -1,5 +1,18 @@
 import { type ChildProcess, spawn } from 'child_process';
 import { EventEmitter } from 'events';
+import { app } from 'electron';
+import * as path from 'path';
+import * as fs from 'fs';
+
+function resolveFfmpegPath(): string {
+  const binName = process.platform === 'win32' ? 'ffmpeg.exe' : 'ffmpeg';
+  const bundled = app.isPackaged
+    ? path.join(process.resourcesPath, 'ffmpeg', binName)
+    : path.join(app.getAppPath(), 'resources', 'ffmpeg', binName);
+  if (fs.existsSync(bundled)) return bundled;
+  // Fallback: hope it's on PATH
+  return 'ffmpeg';
+}
 
 export interface EncoderConfig {
   format: string;
@@ -46,7 +59,7 @@ export class Encoder extends EventEmitter {
       'pipe:1',
     ];
 
-    this.ffmpeg = spawn('ffmpeg', args, { stdio: ['pipe', 'pipe', 'pipe'] });
+    this.ffmpeg = spawn(resolveFfmpegPath(), args, { stdio: ['pipe', 'pipe', 'pipe'] });
     this.running = true;
 
     this.ffmpeg.stdout!.on('data', (data: Buffer) => {
@@ -116,7 +129,7 @@ export class HlsEncoder extends EventEmitter {
       config.hlsPath,
     ];
 
-    this.ffmpeg = spawn('ffmpeg', args, { stdio: ['pipe', 'pipe', 'pipe'] });
+    this.ffmpeg = spawn(resolveFfmpegPath(), args, { stdio: ['pipe', 'pipe', 'pipe'] });
     this.running = true;
 
     this.ffmpeg.stderr!.on('data', (data: Buffer) => {

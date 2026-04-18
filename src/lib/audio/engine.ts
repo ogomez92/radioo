@@ -76,8 +76,8 @@ export class AudioEngine {
     this.onPcmData = onPcmData;
     this.ctx = new AudioContext({ sampleRate: 48000 });
 
-    await this.ctx.audioWorklet.addModule('/worklets/noise-gate-processor.js');
-    await this.ctx.audioWorklet.addModule('/worklets/pcm-capture-processor.js');
+    await this.ctx.audioWorklet.addModule(new URL('worklets/noise-gate-processor.js', document.baseURI).href);
+    await this.ctx.audioWorklet.addModule(new URL('worklets/pcm-capture-processor.js', document.baseURI).href);
 
     this.createNodes();
     this.connectPermanentRouting();
@@ -559,6 +559,25 @@ export class AudioEngine {
     };
     makeBeep(now);
     makeBeep(now + 0.14);
+  }
+
+  /** Plays a continuous 1-second beep on the broadcaster's speakers only.
+   *  Routed to ctx.destination, so it is NOT mixed into the stream. */
+  playDisconnectBeep(): void {
+    if (!this.ctx) return;
+    const now = this.ctx.currentTime;
+    const osc = this.ctx.createOscillator();
+    const g = this.ctx.createGain();
+    osc.type = 'sine';
+    osc.frequency.value = 800;
+    g.gain.setValueAtTime(0, now);
+    g.gain.linearRampToValueAtTime(0.6, now + 0.01);
+    g.gain.setValueAtTime(0.6, now + 0.98);
+    g.gain.linearRampToValueAtTime(0, now + 1.0);
+    osc.connect(g);
+    g.connect(this.ctx.destination);
+    osc.start(now);
+    osc.stop(now + 1.02);
   }
 
   // --- Utilities ---

@@ -1,5 +1,6 @@
 <script lang="ts">
   import { store } from '../stores/app-store.svelte';
+  import { i18n } from '../i18n/i18n.svelte';
   import type { MicEffects } from '../types';
 
   let {
@@ -17,20 +18,20 @@
     onEffectsChange({ ...store.effects });
   }
 
-  const effects: { key: keyof MicEffects; label: string; description: string }[] = [
-    { key: 'boost', label: 'Boost', description: '+6 dB gain increase' },
-    { key: 'noiseGate', label: 'Gate', description: 'Noise gate — cuts silence' },
-    { key: 'compressor', label: 'Compressor', description: 'Dynamic range control' },
-    { key: 'presence', label: 'Presence', description: '2–5 kHz clarity boost' },
-    { key: 'megaphone', label: 'Megaphone', description: 'Lo-fi bandpass filter' },
-    { key: 'reverb', label: 'Reverb', description: 'Convolution reverb' },
-  ];
+  const effects = $derived<{ key: keyof MicEffects; label: string; description: string }[]>([
+    { key: 'boost', label: i18n.t('effects.boost'), description: i18n.t('effects.boostDesc') },
+    { key: 'noiseGate', label: i18n.t('effects.gate'), description: i18n.t('effects.gateDesc') },
+    { key: 'compressor', label: i18n.t('effects.compressor'), description: i18n.t('effects.compressorDesc') },
+    { key: 'presence', label: i18n.t('effects.presence'), description: i18n.t('effects.presenceDesc') },
+    { key: 'megaphone', label: i18n.t('effects.megaphone'), description: i18n.t('effects.megaphoneDesc') },
+    { key: 'reverb', label: i18n.t('effects.reverb'), description: i18n.t('effects.reverbDesc') },
+  ]);
 </script>
 
 <section class="panel" aria-labelledby="effects-heading">
-  <h2 id="effects-heading">Mic Effects</h2>
+  <h2 id="effects-heading">{i18n.t('effects.heading')}</h2>
 
-  <div class="effects-grid" role="group" aria-label="Microphone effects toggles">
+  <div class="effects-grid" role="group" aria-label={i18n.t('effects.aria')}>
     {#each effects as fx}
       <button
         class="toggle"
@@ -47,20 +48,20 @@
   </div>
 
   <p class="text-sm text-muted" style="margin-top: 10px">
-    Chain: Boost → Gate → Compressor → Presence → Megaphone → Reverb → Limiter
+    {i18n.t('effects.chain')}
   </p>
 </section>
 
 <section class="panel" aria-labelledby="ir-heading">
-  <h2 id="ir-heading">Impulse Response</h2>
+  <h2 id="ir-heading">{i18n.t('effects.irHeading')}</h2>
 
   <p class="text-sm text-muted" style="margin-bottom: 10px">
-    Load a WAV/AIFF impulse response file for convolution reverb. Without one, a synthetic room IR is used.
+    {i18n.t('effects.irDesc')}
   </p>
 
   <div class="row gap-md">
-    <button class="btn-outline" onclick={onLoadImpulse} aria-label="Load impulse response file">
-      Load IR File
+    <button class="btn-outline" onclick={onLoadImpulse} aria-label={i18n.t('effects.loadIrAria')}>
+      {i18n.t('effects.loadIr')}
     </button>
 
     {#if store.irFileName}
@@ -68,12 +69,12 @@
       <button
         class="btn-outline text-sm"
         onclick={onClearImpulse}
-        aria-label="Clear impulse response and use default"
+        aria-label={i18n.t('effects.clearIrAria')}
       >
-        Clear
+        {i18n.t('effects.clearIr')}
       </button>
     {:else}
-      <span class="text-sm text-muted">Using built-in synthetic IR</span>
+      <span class="text-sm text-muted">{i18n.t('effects.usingBuiltIn')}</span>
     {/if}
   </div>
 </section>

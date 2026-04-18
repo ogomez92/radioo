@@ -1,5 +1,6 @@
 <script lang="ts">
   import { store } from '../stores/app-store.svelte';
+  import { i18n } from '../i18n/i18n.svelte';
   import { FORMAT_LABELS, BITRATE_OPTIONS, type StreamFormat } from '../types';
   import { tick } from 'svelte';
 
@@ -70,16 +71,16 @@
 </script>
 
 <section class="panel" aria-labelledby="profiles-heading">
-  <h2 id="profiles-heading">Server Profiles</h2>
+  <h2 id="profiles-heading">{i18n.t('server.profilesHeading')}</h2>
 
   <div class="row gap-md profile-row">
     <select
       value={store.activeProfileId}
       onchange={handleProfileSelect}
-      aria-label="Select server profile"
+      aria-label={i18n.t('server.selectProfile')}
       class="flex-1"
     >
-      <option value="">-- New Server --</option>
+      <option value="">{i18n.t('server.newServer')}</option>
       {#each store.serverProfiles as profile}
         <option value={profile.id}>{profile.name}</option>
       {/each}
@@ -91,28 +92,28 @@
         bind:this={nameInput}
         bind:value={editingName}
         onkeydown={handleNameKeydown}
-        placeholder="Profile name"
-        aria-label="Profile name"
+        placeholder={i18n.t('server.profileName')}
+        aria-label={i18n.t('server.profileName')}
         style="max-width: 160px"
       />
-      <button class="btn-primary btn-sm" onclick={confirmSave}>Save</button>
-      <button class="btn-outline btn-sm" onclick={cancelSave}>Cancel</button>
+      <button class="btn-primary btn-sm" onclick={confirmSave}>{i18n.t('server.save')}</button>
+      <button class="btn-outline btn-sm" onclick={cancelSave}>{i18n.t('server.cancel')}</button>
     {:else}
       <button
         class="btn-outline btn-sm"
         onclick={startSave}
         disabled={!store.streamUrl}
-        aria-label={activeProfile ? 'Update current profile' : 'Save as new profile'}
+        aria-label={activeProfile ? i18n.t('server.updateProfileAria') : i18n.t('server.saveNewProfileAria')}
       >
-        {activeProfile ? (isDirty ? 'Update' : 'Saved') : 'Save'}
+        {activeProfile ? (isDirty ? i18n.t('server.update') : i18n.t('server.saved')) : i18n.t('server.save')}
       </button>
       {#if activeProfile}
         <button
           class="btn-outline btn-sm text-danger"
           onclick={deleteActive}
-          aria-label="Delete profile {activeProfile.name}"
+          aria-label={i18n.t('server.deleteProfileAria', { name: activeProfile.name })}
         >
-          Delete
+          {i18n.t('server.delete')}
         </button>
       {/if}
     {/if}
@@ -120,11 +121,11 @@
 </section>
 
 <section class="panel" aria-labelledby="server-heading">
-  <h2 id="server-heading">Icecast Server</h2>
+  <h2 id="server-heading">{i18n.t('server.serverHeading')}</h2>
 
   <div class="col gap-sm">
     <div class="col gap-sm">
-      <label for="stream-url">Server URL</label>
+      <label for="stream-url">{i18n.t('server.serverUrl')}</label>
       <input
         id="stream-url"
         type="url"
@@ -132,28 +133,28 @@
         bind:value={store.streamUrl}
         aria-describedby="url-hint"
       />
-      <span id="url-hint" class="text-sm text-muted">http(s)://host:port/mount</span>
+      <span id="url-hint" class="text-sm text-muted">{i18n.t('server.urlHint')}</span>
     </div>
 
     <div class="two-col">
       <div class="col gap-sm">
-        <label for="stream-user">Username</label>
+        <label for="stream-user">{i18n.t('server.username')}</label>
         <input id="stream-user" type="text" bind:value={store.streamUsername} />
       </div>
       <div class="col gap-sm">
-        <label for="stream-pass">Password</label>
+        <label for="stream-pass">{i18n.t('server.password')}</label>
         <input id="stream-pass" type="password" bind:value={store.streamPassword} autocomplete="off" />
       </div>
     </div>
 
     <div class="col gap-sm">
-      <label for="stream-name">Stream Name</label>
+      <label for="stream-name">{i18n.t('server.streamName')}</label>
       <input id="stream-name" type="text" bind:value={store.streamName} />
     </div>
 
     <div class="two-col">
       <div class="col gap-sm">
-        <label for="srv-format">Format</label>
+        <label for="srv-format">{i18n.t('server.format')}</label>
         <select id="srv-format" bind:value={store.streamFormat}>
           {#each formats as [value, label]}
             <option {value}>{label}</option>
@@ -161,7 +162,7 @@
         </select>
       </div>
       <div class="col gap-sm">
-        <label for="srv-bitrate">Bitrate (kbps)</label>
+        <label for="srv-bitrate">{i18n.t('server.bitrate')}</label>
         <select id="srv-bitrate" bind:value={store.streamBitrate}>
           {#each BITRATE_OPTIONS as br}
             <option value={br}>{br}</option>
@@ -173,17 +174,17 @@
 </section>
 
 <section class="panel" aria-labelledby="hls-heading">
-  <h2 id="hls-heading">HLS Output</h2>
+  <h2 id="hls-heading">{i18n.t('server.hlsHeading')}</h2>
 
   <div class="col gap-sm">
     <label class="row gap-sm" style="cursor: pointer">
       <input type="checkbox" bind:checked={store.hlsEnabled} />
-      Enable HLS output
+      {i18n.t('server.enableHls')}
     </label>
 
     {#if store.hlsEnabled}
       <div class="col gap-sm">
-        <label for="hls-path">Output path</label>
+        <label for="hls-path">{i18n.t('server.outputPath')}</label>
         <input
           id="hls-path"
           type="text"

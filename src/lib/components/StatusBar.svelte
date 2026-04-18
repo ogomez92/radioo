@@ -1,31 +1,38 @@
 <script lang="ts">
   import { store } from '../stores/app-store.svelte';
+  import { i18n } from '../i18n/i18n.svelte';
 
   const statusText = $derived.by(() => {
-    if (store.reconnecting) return 'Reconnecting...';
-    if (store.connected) return `Connected to ${new URL(store.streamUrl).host}`;
-    if (store.streaming) return 'Starting...';
-    return 'Idle';
+    if (store.reconnecting) return i18n.t('status.reconnecting');
+    if (store.connected) {
+      try {
+        return i18n.t('status.connectedTo', { host: new URL(store.streamUrl).host });
+      } catch {
+        return i18n.t('status.connectedTo', { host: store.streamUrl });
+      }
+    }
+    if (store.streaming) return i18n.t('status.starting');
+    return i18n.t('status.idle');
   });
 
   const formatLabel = $derived(store.streamFormat.toUpperCase() + ' ' + store.streamBitrate + 'kbps');
 </script>
 
-<footer class="app-footer" aria-label="Application status">
+<footer class="app-footer" aria-label={i18n.t('status.appAria')}>
   <span class="row gap-sm">
     {#if store.streaming}
-      <span class="status-dot live" aria-label="Live"></span>
+      <span class="status-dot live" aria-label={i18n.t('status.live')}></span>
     {:else if store.connected}
-      <span class="status-dot connected" aria-label="Connected"></span>
+      <span class="status-dot connected" aria-label={i18n.t('status.connected')}></span>
     {:else}
-      <span class="status-dot" aria-label="Disconnected"></span>
+      <span class="status-dot" aria-label={i18n.t('status.disconnected')}></span>
     {/if}
     <span>{statusText}</span>
   </span>
 
   {#if store.streaming || store.recording}
-    <span aria-label="Output format">{formatLabel}</span>
-    <span aria-label="Duration">{store.durationFormatted}</span>
+    <span aria-label={i18n.t('status.outputFormatAria')}>{formatLabel}</span>
+    <span aria-label={i18n.t('status.durationAria')}>{store.durationFormatted}</span>
   {/if}
 
   {#if store.recording}
@@ -44,11 +51,11 @@
   {/if}
 
   <span class="shortcuts text-muted" style="margin-left: auto;">
-    <kbd>Ctrl+M</kbd> Mic Mute
-    <kbd>Ctrl+Shift+M</kbd> Sys Mute
-    <kbd>Ctrl+D</kbd> Duck
-    <kbd>Ctrl+S</kbd> Stream
-    <kbd>Ctrl+R</kbd> Record
+    <kbd>Ctrl+M</kbd> {i18n.t('shortcuts.micMute')}
+    <kbd>Ctrl+Shift+M</kbd> {i18n.t('shortcuts.sysMute')}
+    <kbd>Ctrl+D</kbd> {i18n.t('shortcuts.duck')}
+    <kbd>Ctrl+S</kbd> {i18n.t('shortcuts.stream')}
+    <kbd>Ctrl+R</kbd> {i18n.t('shortcuts.record')}
   </span>
 </footer>
 

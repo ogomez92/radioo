@@ -103,6 +103,7 @@ export class IcecastClient extends EventEmitter {
               : net.connect({ host, port }, () => onConnect('SOURCE'));
             this.socket = fallback;
             fallback.setNoDelay(true);
+            fallback.setKeepAlive(true, 30000);
             fallback.setTimeout(10000);
             fallback.on('error', onSocketError);
             fallback.on('close', onSocketClose);
@@ -124,8 +125,16 @@ export class IcecastClient extends EventEmitter {
             detail = `Server rejected connection to ${target}: ${firstLine}${snippet}`;
           }
           const err = new Error(detail);
-          this.emit('error', err);
+          // During auto-reconnect, suppress the error toast so transient
+          // "mount still held" 401/403/409 responses from the server don't
+          // spam the UI while we're retrying.
+          if (!this.reconnecting) this.emit('error', err);
           reject(err);
+          // Destroy the socket so the close handler fires and
+          // scheduleReconnect() is triggered. Without this, a handshake
+          // rejection would leave the socket half-open and the reconnect
+          // loop would stall after one failed attempt.
+          this.socket?.destroy();
         };
         this.socket!.on('data', onData);
       };
@@ -178,6 +187,11 @@ export class IcecastClient extends EventEmitter {
         : net.connect({ host, port }, () => onConnect('PUT'));
 
       this.socket.setNoDelay(true);
+      // Keep NAT / firewall state alive on the inbound side. Icecast never
+      // sends data back to a source client, so home routers and ISP gateways
+      // commonly drop the connection state after ~5 minutes of no inbound
+      // traffic. TCP keepalive probes from the OS prevent that.
+      this.socket.setKeepAlive(true, 30000);
       this.socket.setTimeout(10000);
       this.socket.on('error', onSocketError);
       this.socket.on('close', onSocketClose);

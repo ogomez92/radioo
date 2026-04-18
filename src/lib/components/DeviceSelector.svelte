@@ -1,5 +1,6 @@
 <script lang="ts">
   import { store } from '../stores/app-store.svelte';
+  import { i18n } from '../i18n/i18n.svelte';
   import VuMeter from './VuMeter.svelte';
 
   let {
@@ -57,14 +58,14 @@
 </script>
 
 <section class="panel" aria-labelledby="sources-heading">
-  <h2 id="sources-heading">Audio Sources</h2>
+  <h2 id="sources-heading">{i18n.t('sources.heading')}</h2>
 
   <!-- Microphone -->
   <div class="source-block">
     <div class="col gap-sm">
-      <label for="mic-select">Microphone</label>
+      <label for="mic-select">{i18n.t('sources.microphone')}</label>
       <select id="mic-select" value={store.micDeviceId} onchange={handleMicSelect}>
-        <option value="">-- None --</option>
+        <option value="">{i18n.t('sources.none')}</option>
         {#each store.availableDevices as device}
           <option value={device.deviceId}>
             {device.label || `Mic ${device.deviceId.slice(0, 8)}`}
@@ -74,7 +75,7 @@
     </div>
 
     <div class="row gap-md" style="margin-top: 8px">
-      <label for="mic-gain" class="sr-only">Microphone gain</label>
+      <label for="mic-gain" class="sr-only">{i18n.t('sources.micGain')}</label>
       <input
         id="mic-gain"
         type="range"
@@ -83,12 +84,12 @@
         step="0.01"
         value={store.micGain}
         oninput={handleMicGain}
-        aria-label="Microphone gain"
+        aria-label={i18n.t('sources.micGain')}
       />
       <span class="text-sm text-muted" style="min-width: 36px">{Math.round(store.micGain * 100)}%</span>
     </div>
 
-    <VuMeter level={store.micLevel} label="Microphone level" />
+    <VuMeter level={store.micLevel} label={i18n.t('sources.micLevel')} />
   </div>
 
   <!-- System Audio -->
@@ -96,13 +97,13 @@
     <div class="row gap-md">
       <label class="row gap-sm" style="cursor: pointer">
         <input type="checkbox" checked={store.sysAudioEnabled} onchange={handleSysToggle} />
-        System Audio (Loopback)
+        {i18n.t('sources.systemAudio')}
       </label>
     </div>
 
     {#if store.sysAudioEnabled}
       <div class="row gap-md" style="margin-top: 8px">
-        <label for="sys-gain" class="sr-only">System audio gain</label>
+        <label for="sys-gain" class="sr-only">{i18n.t('sources.sysGain')}</label>
         <input
           id="sys-gain"
           type="range"
@@ -111,7 +112,7 @@
           step="0.01"
           value={store.sysGain}
           oninput={handleSysGain}
-          aria-label="System audio gain"
+          aria-label={i18n.t('sources.sysGain')}
         />
         <span class="text-sm text-muted" style="min-width: 36px">{Math.round(store.sysGain * 100)}%</span>
       </div>
