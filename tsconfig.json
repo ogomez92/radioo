@@ -11,12 +11,19 @@
     "isolatedModules": true,
     "verbatimModuleSyntax": true,
     "lib": ["ESNext", "DOM", "DOM.Iterable"],
+    "types": ["vitest/globals"],
     "outDir": "dist",
     "baseUrl": ".",
     "paths": {
       "$lib/*": ["src/lib/*"]
     }
   },
-  "include": ["src/**/*.ts", "src/**/*.svelte", "src/**/*.svelte.ts"],
+  "include": [
+    "src/**/*.ts",
+    "src/**/*.svelte",
+    "src/**/*.svelte.ts",
+    "electron/**/*.ts",
+    "vitest.config.ts"
+  ],
   "exclude": ["node_modules", "dist", "dist-electron"]
 }

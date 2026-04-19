@@ -1,17 +1,29 @@
 import type { MicEffects, ServerProfile, StreamFormat } from '../types';
 
+export type SyscapMode = 'all' | 'include' | 'exclude';
+
 class AppStore {
   // Devices
   micDeviceId = $state('');
   availableDevices = $state<MediaDeviceInfo[]>([]);
-  sysAudioEnabled = $state(false);
+
+  // Per-process system audio capture
+  syscapEnabled = $state(false);
+  // Default to 'all' (broad capture) so the common broadcaster workflow works
+  // with one click. Switch to 'include'/'exclude' only when the user wants to
+  // filter specific processes.
+  syscapMode = $state<SyscapMode>('all');
+  syscapPids = $state<number[]>([]);
+  // Cached friendly names for persisted PIDs (used by the UI between launches
+  // before a fresh syscap:list returns).
+  syscapPidNames = $state<Record<number, string>>({});
+  syscapSupported = $state(true);
 
   // Gains (0–2 range, 1 = unity)
   micGain = $state(1.0);
   sysGain = $state(1.0);
   masterGain = $state(1.0);
   micMuted = $state(false);
-  sysAudioMuted = $state(false);
 
   // Mic effects
   effects = $state<MicEffects>({
@@ -54,6 +66,11 @@ class AppStore {
   hlsEnabled = $state(false);
   hlsPath = $state('');
 
+  // Optional override for listener-count polling. When the broadcasted mount
+  // is relayed (e.g., we SOURCE to /live.mp3 but audience listens on
+  // /stream.mp3 via liquidsoap), set this to the public mount URL.
+  listenerCountUrl = $state('');
+
   // UI
   language = $state<'en' | 'es' | 'fr' | 'it' | 'pt' | 'de' | 'ja'>('en');
 
@@ -64,6 +81,7 @@ class AppStore {
   reconnecting = $state(false);
   duration = $state(0);
   listeners = $state(0);
+  listenersError = $state<string | null>(null);
   error = $state<string | null>(null);
   hlsActive = $state(false);
 
@@ -125,7 +143,10 @@ class AppStore {
       streamBitrate: this.streamBitrate,
       streamName: this.streamName,
       micDeviceId: this.micDeviceId,
-      sysAudioEnabled: this.sysAudioEnabled,
+      syscapEnabled: this.syscapEnabled,
+      syscapMode: this.syscapMode,
+      syscapPids: [...this.syscapPids],
+      syscapPidNames: { ...this.syscapPidNames },
       effects: { ...this.effects },
       irFilePath: this.irFilePath,
       irFileName: this.irFileName,
@@ -136,11 +157,11 @@ class AppStore {
       masterGain: this.masterGain,
       hlsEnabled: this.hlsEnabled,
       hlsPath: this.hlsPath,
+      listenerCountUrl: this.listenerCountUrl,
       musicFilePath: this.musicFilePath,
       musicFileName: this.musicFileName,
       musicVolume: this.musicVolume,
       micMuted: this.micMuted,
-      sysAudioMuted: this.sysAudioMuted,
       language: this.language,
       muteSysWhileMusicPlaying: this.muteSysWhileMusicPlaying,
     };
@@ -157,7 +178,19 @@ class AppStore {
     if (typeof s.streamBitrate === 'number') this.streamBitrate = s.streamBitrate;
     if (typeof s.streamName === 'string') this.streamName = s.streamName;
     if (typeof s.micDeviceId === 'string') this.micDeviceId = s.micDeviceId;
-    if (typeof s.sysAudioEnabled === 'boolean') this.sysAudioEnabled = s.sysAudioEnabled;
+    // Migrate old sysAudioEnabled flag onto the new syscap* fields.
+    if (typeof s.syscapEnabled === 'boolean') this.syscapEnabled = s.syscapEnabled;
+    else if (typeof s.sysAudioEnabled === 'boolean') this.syscapEnabled = s.sysAudioEnabled;
+    if (s.syscapMode === 'all' || s.syscapMode === 'include' || s.syscapMode === 'exclude') this.syscapMode = s.syscapMode;
+    if (Array.isArray(s.syscapPids)) this.syscapPids = (s.syscapPids as unknown[]).filter((x): x is number => typeof x === 'number');
+    if (s.syscapPidNames && typeof s.syscapPidNames === 'object') {
+      const out: Record<number, string> = {};
+      for (const [k, v] of Object.entries(s.syscapPidNames as Record<string, unknown>)) {
+        const n = Number(k);
+        if (Number.isFinite(n) && typeof v === 'string') out[n] = v;
+      }
+      this.syscapPidNames = out;
+    }
     if (s.effects && typeof s.effects === 'object') Object.assign(this.effects, s.effects);
     if (typeof s.irFilePath === 'string') this.irFilePath = s.irFilePath;
     if (typeof s.irFileName === 'string') this.irFileName = s.irFileName;
@@ -168,11 +201,11 @@ class AppStore {
     if (typeof s.masterGain === 'number') this.masterGain = s.masterGain;
     if (typeof s.hlsEnabled === 'boolean') this.hlsEnabled = s.hlsEnabled;
     if (typeof s.hlsPath === 'string') this.hlsPath = s.hlsPath;
+    if (typeof s.listenerCountUrl === 'string') this.listenerCountUrl = s.listenerCountUrl;
     if (typeof s.musicFilePath === 'string') this.musicFilePath = s.musicFilePath;
     if (typeof s.musicFileName === 'string') this.musicFileName = s.musicFileName;
     if (typeof s.musicVolume === 'number') this.musicVolume = s.musicVolume;
     if (typeof s.micMuted === 'boolean') this.micMuted = s.micMuted;
-    if (typeof s.sysAudioMuted === 'boolean') this.sysAudioMuted = s.sysAudioMuted;
     if (typeof s.language === 'string' && ['en','es','fr','it','pt','de','ja'].includes(s.language)) {
       this.language = s.language as typeof this.language;
     }

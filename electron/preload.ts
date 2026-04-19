@@ -35,4 +35,22 @@ contextBridge.exposeInMainWorld('api', {
     ipcRenderer.on('shortcut', handler);
     return () => { ipcRenderer.removeListener('shortcut', handler); };
   },
+
+  // Per-process audio capture
+  syscapSupported: () => ipcRenderer.invoke('syscap:supported'),
+  syscapList: () => ipcRenderer.invoke('syscap:list'),
+  syscapSetTargets: (mode: 'all' | 'include' | 'exclude', pids: number[]) =>
+    ipcRenderer.invoke('syscap:set-targets', { mode, pids }),
+  syscapStop: () => ipcRenderer.invoke('syscap:stop'),
+  syscapScreenReaderPid: () => ipcRenderer.invoke('syscap:screen-reader-pid'),
+  onSyscapPcm: (callback: (payload: { pid: number; buffer: ArrayBuffer }) => void) => {
+    const handler = (_: unknown, payload: { pid: number; buffer: ArrayBuffer }) => callback(payload);
+    ipcRenderer.on('syscap:pcm', handler);
+    return () => { ipcRenderer.removeListener('syscap:pcm', handler); };
+  },
+  onSyscapEnded: (callback: (payload: { pid: number; code: number | null; signal: string | null }) => void) => {
+    const handler = (_: unknown, payload: { pid: number; code: number | null; signal: string | null }) => callback(payload);
+    ipcRenderer.on('syscap:ended', handler);
+    return () => { ipcRenderer.removeListener('syscap:ended', handler); };
+  },
 });

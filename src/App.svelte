@@ -4,7 +4,7 @@
   import { store } from './lib/stores/app-store.svelte';
   import { i18n } from './lib/i18n/i18n.svelte';
   import type { MicEffects } from './lib/types';
-  import DeviceSelector from './lib/components/DeviceSelector.svelte';
+  import SourcesPanel from './lib/components/SourcesPanel.svelte';
   import EffectsPanel from './lib/components/EffectsPanel.svelte';
   import MixerPanel from './lib/components/MixerPanel.svelte';
   import MusicPlayerPanel from './lib/components/MusicPlayerPanel.svelte';
@@ -18,6 +18,8 @@
   let meterInterval: ReturnType<typeof setInterval>;
   let removeStatusListener: (() => void) | null = null;
   let removeShortcutListener: (() => void) | null = null;
+  let removeSyscapPcmListener: (() => void) | null = null;
+  let removeSyscapEndedListener: (() => void) | null = null;
   let momentaryDuckActive = false;
   let muteAnnouncement = $state('');
   let wasConnected = false;
@@ -55,11 +57,27 @@
   }
 
   onMount(async () => {
+    // Move focus to the first tab so keyboard / screen-reader users land
+    // inside the app immediately instead of at document start.
+    requestAnimationFrame(() => {
+      document.getElementById(`tab-${activeTab}`)?.focus();
+    });
+
     engine = new AudioEngine();
     try {
       await engine.init((pcm: Float32Array) => {
         window.api?.sendAudioData(pcm.buffer as ArrayBuffer);
       });
+      const ctx = engine.audioContext;
+      if (ctx) {
+        // eslint-disable-next-line no-console
+        console.log(
+          '[audio] ctx.sampleRate=%d baseLatency=%f outputLatency=%f',
+          ctx.sampleRate,
+          ctx.baseLatency,
+          ctx.outputLatency ?? -1,
+        );
+      }
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
       store.error = `Audio engine init failed: ${msg}`;
@@ -96,6 +114,7 @@
       if (status.recording !== undefined) store.recording = status.recording as boolean;
       if (status.duration !== undefined) store.duration = status.duration as number;
       if (status.listeners !== undefined) store.listeners = status.listeners as number;
+      if (status.listenersError !== undefined) store.listenersError = status.listenersError as string | null;
       if (status.error !== undefined) store.error = status.error as string | null;
       if (status.reconnecting !== undefined) store.reconnecting = status.reconnecting as boolean;
       if (status.hlsActive !== undefined) store.hlsActive = status.hlsActive as boolean;
@@ -114,7 +133,6 @@
     engine.setMasterGain(store.masterGain);
     engine.setMusicVolume(store.musicVolume / 100);
     engine.setMicMuted(store.micMuted);
-    engine.setSysMuted(store.sysAudioMuted);
 
     // Restore mic device — enumerate first, then check saved device still exists
     if (store.micDeviceId) {
@@ -132,14 +150,18 @@
       }
     }
 
-    // Restore system audio capture
-    if (store.sysAudioEnabled) {
-      try {
-        await engine.enableSystemAudio();
-      } catch {
-        store.sysAudioEnabled = false;
-      }
-    }
+    // Per-process system audio capture
+    const syscapSupported = (await window.api?.syscapSupported()) ?? false;
+    store.syscapSupported = syscapSupported;
+    if (!syscapSupported) store.syscapEnabled = false;
+
+    removeSyscapPcmListener = window.api?.onSyscapPcm(({ pid, buffer }) => {
+      engine?.pushSysPcm(pid, buffer);
+    }) ?? null;
+
+    removeSyscapEndedListener = window.api?.onSyscapEnded(({ pid }) => {
+      engine?.detachSysSource(pid);
+    }) ?? null;
 
     // Reload saved music file
     if (store.musicFilePath) {
@@ -176,6 +198,9 @@
     window.removeEventListener('beforeunload', saveSettingsSync);
     removeShortcutListener?.();
     removeStatusListener?.();
+    removeSyscapPcmListener?.();
+    removeSyscapEndedListener?.();
+    window.api?.syscapStop();
     engine?.destroy();
     saveSettingsSync();
   });
@@ -229,6 +254,9 @@
     } else if (e.ctrlKey && e.shiftKey && (e.key === 'R' || e.key === 'r')) {
       e.preventDefault();
       announceMusicProgress();
+    } else if (e.ctrlKey && (e.key === 'l' || e.key === 'L')) {
+      e.preventDefault();
+      announceListenerCount();
     }
   }
 
@@ -260,6 +288,41 @@
       case 'music-toggle-play':
         toggleMusicPlay();
         break;
+      case 'toggle-screen-reader':
+        toggleScreenReader();
+        break;
+    }
+  }
+
+  async function toggleScreenReader(): Promise<void> {
+    if (!store.syscapSupported) return;
+    const pid = await window.api?.syscapScreenReaderPid();
+    if (!pid) {
+      announce(i18n.t('announce.screenReaderNotFound'));
+      return;
+    }
+    // Make sure capture is on — otherwise the shortcut would silently do nothing.
+    if (!store.syscapEnabled) store.syscapEnabled = true;
+
+    // In "Capture system audio" (all) mode, the natural interpretation of
+    // toggling SR is "silence it": promote to exclude + add the SR PID.
+    if (store.syscapMode === 'all') {
+      store.syscapMode = 'exclude';
+      store.syscapPids = [pid];
+      store.syscapPidNames = { ...store.syscapPidNames, [pid]: 'Screen reader' };
+      announce(i18n.t('announce.screenReaderAdded', { mode: store.syscapMode }));
+      return;
+    }
+
+    if (store.syscapPids.includes(pid)) {
+      store.syscapPids = store.syscapPids.filter((p) => p !== pid);
+      const { [pid]: _, ...rest } = store.syscapPidNames;
+      store.syscapPidNames = rest;
+      announce(i18n.t('announce.screenReaderRemoved', { mode: store.syscapMode }));
+    } else {
+      store.syscapPids = [...store.syscapPids, pid];
+      store.syscapPidNames = { ...store.syscapPidNames, [pid]: 'Screen reader' };
+      announce(i18n.t('announce.screenReaderAdded', { mode: store.syscapMode }));
     }
   }
 
@@ -277,9 +340,9 @@
   }
 
   function toggleSysMute(): void {
-    store.sysAudioMuted = !store.sysAudioMuted;
-    engine?.setSysMuted(store.sysAudioMuted);
-    announce(store.sysAudioMuted ? i18n.t('announce.sysMuted') : i18n.t('announce.sysUnmuted'));
+    if (!store.syscapSupported) return;
+    store.syscapEnabled = !store.syscapEnabled;
+    announce(store.syscapEnabled ? i18n.t('announce.sysUnmuted') : i18n.t('announce.sysMuted'));
   }
 
   async function onMicChange(deviceId: string): Promise<void> {
@@ -291,19 +354,31 @@
     }
   }
 
-  async function onSysToggle(enabled: boolean): Promise<void> {
-    try {
-      if (enabled) {
-        await engine?.enableSystemAudio();
-      } else {
-        engine?.disableSystemAudio();
-      }
-      store.error = null;
-    } catch (err) {
-      store.sysAudioEnabled = false;
-      store.error = i18n.t('errors.sysError', { msg: err instanceof Error ? err.message : String(err) });
+  // Push syscap desired targets to the main process whenever the config changes.
+  // Also detach any renderer-side worklet nodes that no longer map to an active
+  // sidecar so the Web Audio graph stays in sync.
+  $effect(() => {
+    if (!settingsLoaded) return;
+    const enabled = store.syscapEnabled && store.syscapSupported;
+    const mode = store.syscapMode;
+    const pids = [...store.syscapPids];
+
+    if (!enabled) {
+      // When syscap is off we need to explicitly stop sidecars. Calling
+      // syscapSetTargets with pids:[] isn't enough — 'all' mode spawns a
+      // sidecar regardless of pids.
+      window.api?.syscapStop().catch(() => { /* errors surface via status:update */ });
+    } else {
+      window.api?.syscapSetTargets(mode, pids).catch(() => { /* errors surface via status:update */ });
     }
-  }
+
+    if (engine) {
+      const allowed = enabled ? new Set(mode === 'all' ? [0] : pids) : new Set<number>();
+      for (const p of engine.activeSysPids) {
+        if (!allowed.has(p)) engine.detachSysSource(p);
+      }
+    }
+  });
 
   function onEffectsChange(effects: MicEffects): void {
     engine?.setEffects(effects);
@@ -362,7 +437,14 @@
         store.musicFilePath = filePath;
         store.musicFileName = filePath.split(/[\\/]/).pop() ?? filePath;
         store.musicPlaying = false;
+        // Re-apply the saved volume to the engine. loadMusicFile doesn't
+        // touch musicGain, but if the Web Audio graph was ever rebuilt
+        // (HMR, context restart) the gain could be out of sync with the
+        // store's 0–100 value.
+        engine.setMusicVolume(store.musicVolume / 100);
         announce(i18n.t('announce.musicLoaded', { name: store.musicFileName }));
+        // Auto-play: user just picked a file, assume they want to hear it.
+        toggleMusicPlay();
       }
     } catch (err) {
       store.error = i18n.t('errors.musicLoad', { msg: err instanceof Error ? err.message : String(err) });
@@ -382,9 +464,8 @@
         // Auto-mute system audio if the setting is on. Only fires on the
         // play transition — user can still unmute mid-playback, and we never
         // unmute automatically when the track ends.
-        if (store.muteSysWhileMusicPlaying && !store.sysAudioMuted) {
-          store.sysAudioMuted = true;
-          engine.setSysMuted(true);
+        if (store.muteSysWhileMusicPlaying && store.syscapEnabled) {
+          store.syscapEnabled = false;
         }
         announce(i18n.t('announce.musicPlaying'));
       }
@@ -476,6 +557,7 @@
         password: store.streamPassword,
         format: store.streamFormat,
         streamName: store.streamName,
+        listenerCountUrl: store.listenerCountUrl,
       });
     } catch (err) {
       result = { success: false, error: err instanceof Error ? err.message : String(err) };
@@ -573,6 +655,35 @@
   let prevConnected = false;
   let prevStreaming = false;
   let prevRecording = false;
+  let prevListeners = 0;
+
+  $effect(() => {
+    const count = store.listeners;
+    // Reset baseline when the stream stops or we have no valid count.
+    if (!store.streaming || count < 0) {
+      prevListeners = 0;
+      return;
+    }
+    if (count > prevListeners) engine?.playListenerUpBeep();
+    else if (count < prevListeners) engine?.playListenerDownBeep();
+    prevListeners = count;
+  });
+
+  function announceListenerCount(): void {
+    if (store.listenersError) {
+      announce(i18n.t('announce.listenersPollError'));
+      return;
+    }
+    if (!store.streaming) {
+      announce(i18n.t('announce.listenersNotStreaming'));
+      return;
+    }
+    if (store.listeners < 0) {
+      announce(i18n.t('announce.listenersUnknown'));
+      return;
+    }
+    announce(i18n.t('announce.listenersCount', { count: store.listeners }));
+  }
   $effect(() => {
     const c = store.connected;
     const s = store.streaming;
@@ -670,9 +781,8 @@
     class="tab-panel"
     hidden={activeTab !== 'main'}
   >
-    <DeviceSelector
+    <SourcesPanel
       {onMicChange}
-      {onSysToggle}
       onMicGainChange={(v) => engine?.setMicGain(v)}
       onSysGainChange={(v) => engine?.setSysGain(v)}
     />
@@ -700,17 +810,6 @@
           title={i18n.t('transport.muteMic', { key: 'Ctrl+M' })}
         >
           {store.micMuted ? '🔇' : '🎤'}
-        </button>
-
-        <button
-          class="btn-icon-lg"
-          class:muted={store.sysAudioMuted}
-          onclick={toggleSysMute}
-          disabled={!store.sysAudioEnabled}
-          aria-label={store.sysAudioMuted ? i18n.t('transport.unmuteSys', { key: 'Ctrl+Shift+M' }) : i18n.t('transport.muteSys', { key: 'Ctrl+Shift+M' })}
-          title={i18n.t('transport.muteSys', { key: 'Ctrl+Shift+M' })}
-        >
-          {store.sysAudioMuted ? '🔇' : '🔊'}
         </button>
 
         {#if store.streaming}
@@ -755,9 +854,22 @@
           {/if}
         {/if}
 
-        {#if store.streaming && store.listeners >= 0}
-          <span class="listeners text-sm" aria-live="polite">
-            {i18n.t('transport.listeners', { count: store.listeners })}
+        <!-- Always rendered while streaming so the live region stays stable and
+             updates reliably, whether the poll succeeds, fails, or is 0. -->
+        {#if store.streaming}
+          <span
+            class="listeners text-sm"
+            class:listeners-error={store.listenersError}
+            aria-live="polite"
+            aria-atomic="true"
+          >
+            {#if store.listenersError}
+              {i18n.t('transport.listenersError')}
+            {:else if store.listeners >= 0}
+              {i18n.t('transport.listeners', { count: store.listeners })}
+            {:else}
+              {i18n.t('transport.listenersPending')}
+            {/if}
           </span>
         {/if}
       </div>
@@ -825,5 +937,8 @@
   .listeners {
     margin-left: auto;
     color: var(--text-secondary);
+  }
+  .listeners-error {
+    color: var(--danger, #e66);
   }
 </style>

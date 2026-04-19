@@ -5,13 +5,15 @@ export class AudioEngine {
 
   // Sources
   private micSource: MediaStreamAudioSourceNode | null = null;
-  private sysSource: MediaStreamAudioSourceNode | null = null;
   private micStream: MediaStream | null = null;
-  private sysStream: MediaStream | null = null;
+  // Per-process system audio: one AudioWorkletNode per captured PID, all summed
+  // into sysInputGain by Web Audio's implicit mixing.
+  private sysPcmNodes = new Map<number, AudioWorkletNode>();
 
   // Gain control
   private micInputGain!: GainNode;
   private sysInputGain!: GainNode;
+  private sysDuckGain!: GainNode;
   private musicGain!: GainNode;
   private musicDuckGain!: GainNode;
   private masterGain!: GainNode;
@@ -60,7 +62,6 @@ export class AudioEngine {
   private duckRafId = 0;
   private micMuted = false;
   private micGainValue = 1.0;
-  private sysMuted = false;
   private sysGainValue = 1.0;
   private onPcmData: ((buffer: Float32Array) => void) | null = null;
 
@@ -78,6 +79,7 @@ export class AudioEngine {
 
     await this.ctx.audioWorklet.addModule(new URL('worklets/noise-gate-processor.js', document.baseURI).href);
     await this.ctx.audioWorklet.addModule(new URL('worklets/pcm-capture-processor.js', document.baseURI).href);
+    await this.ctx.audioWorklet.addModule(new URL('worklets/sys-pcm-player-processor.js', document.baseURI).href);
 
     this.createNodes();
     this.connectPermanentRouting();
@@ -91,6 +93,7 @@ export class AudioEngine {
     // Input/output gains
     this.micInputGain = c.createGain();
     this.sysInputGain = c.createGain();
+    this.sysDuckGain = c.createGain();
     this.musicGain = c.createGain();
     this.musicGain.gain.value = 1.0;
     this.musicDuckGain = c.createGain();
@@ -169,8 +172,11 @@ export class AudioEngine {
   }
 
   private connectPermanentRouting(): void {
-    // System audio: sysInputGain → masterGain (effects-free, not ducked)
-    this.sysInputGain.connect(this.masterGain);
+    // System audio (per-process capture): sysInputGain → sysDuckGain → masterGain.
+    // sysDuckGain shares the same detector as musicDuckGain, so game/app audio
+    // drops when the mic picks up speech.
+    this.sysInputGain.connect(this.sysDuckGain);
+    this.sysDuckGain.connect(this.masterGain);
 
     // Music player: musicGain → musicDuckGain → masterGain (effects-free, ducked)
     this.musicGain.connect(this.musicDuckGain);
@@ -277,37 +283,50 @@ export class AudioEngine {
     this.micSource.connect(this.micInputGain);
   }
 
-  async enableSystemAudio(): Promise<void> {
-    if (this.sysStream) {
-      this.disableSystemAudio();
-    }
-
-    this.sysStream = await navigator.mediaDevices.getDisplayMedia({
-      audio: true,
-      video: true,
+  /** Registers a per-process PCM source. The worklet node is created on first use. */
+  attachSysSource(pid: number): void {
+    if (this.sysPcmNodes.has(pid)) return;
+    const node = new AudioWorkletNode(this.ctx, 'sys-pcm-player-processor', {
+      numberOfInputs: 0,
+      numberOfOutputs: 1,
+      outputChannelCount: [2],
     });
-
-    // Discard the mandatory video track
-    this.sysStream.getVideoTracks().forEach((t) => t.stop());
-
-    const audioTracks = this.sysStream.getAudioTracks();
-    if (audioTracks.length === 0) {
-      throw new Error('System audio capture not available');
-    }
-
-    await this.ctx.resume();
-    const audioOnly = new MediaStream(audioTracks);
-    this.sysSource = this.ctx.createMediaStreamSource(audioOnly);
-    this.sysSource.connect(this.sysInputGain);
+    node.port.onmessage = (e: MessageEvent) => {
+      if (e.data?.type === 'playing') {
+        console.log('[audio] sys worklet pid=%d started playing', pid);
+      }
+    };
+    node.connect(this.sysInputGain);
+    this.sysPcmNodes.set(pid, node);
+    console.log('[audio] attachSysSource pid=%d (total=%d)', pid, this.sysPcmNodes.size);
+    // Resume ctx if it was suspended — same behaviour as getUserMedia path.
+    this.ctx.resume().catch(() => { /* ignore */ });
   }
 
-  disableSystemAudio(): void {
-    if (this.sysStream) {
-      this.sysStream.getTracks().forEach((t) => t.stop());
-      this.sysSource?.disconnect();
-      this.sysSource = null;
-      this.sysStream = null;
+  detachSysSource(pid: number): void {
+    const node = this.sysPcmNodes.get(pid);
+    if (!node) return;
+    try { node.disconnect(); } catch { /* ok */ }
+    node.port.postMessage({ type: 'flush' });
+    this.sysPcmNodes.delete(pid);
+  }
+
+  detachAllSysSources(): void {
+    for (const pid of [...this.sysPcmNodes.keys()]) this.detachSysSource(pid);
+  }
+
+  /** Posts a PCM chunk to the worklet for the given PID. Auto-attaches if unknown. */
+  pushSysPcm(pid: number, interleaved: ArrayBuffer): void {
+    let node = this.sysPcmNodes.get(pid);
+    if (!node) {
+      this.attachSysSource(pid);
+      node = this.sysPcmNodes.get(pid)!;
     }
+    node.port.postMessage({ type: 'pcm', buffer: interleaved }, [interleaved]);
+  }
+
+  get activeSysPids(): number[] {
+    return [...this.sysPcmNodes.keys()];
   }
 
   // --- Controls ---
@@ -321,15 +340,7 @@ export class AudioEngine {
 
   setSysGain(value: number): void {
     this.sysGainValue = value;
-    if (!this.sysMuted) {
-      this.sysInputGain.gain.setTargetAtTime(value, this.ctx.currentTime, 0.01);
-    }
-  }
-
-  setSysMuted(muted: boolean): void {
-    this.sysMuted = muted;
-    const target = muted ? 0 : this.sysGainValue;
-    this.sysInputGain.gain.setTargetAtTime(target, this.ctx.currentTime, 0.005);
+    this.sysInputGain.gain.setTargetAtTime(value, this.ctx.currentTime, 0.01);
   }
 
   setMasterGain(value: number): void {
@@ -366,15 +377,21 @@ export class AudioEngine {
     this.duckingEnabled = enabled;
     this.duckAmount = Math.max(0, Math.min(1, amount));
     if (!enabled) {
-      this.musicDuckGain.gain.setTargetAtTime(1, this.ctx.currentTime, 0.05);
+      const now = this.ctx.currentTime;
+      this.musicDuckGain.gain.setTargetAtTime(1, now, 0.05);
+      this.sysDuckGain.gain.setTargetAtTime(1, now, 0.05);
     }
   }
 
   momentaryDuck(active: boolean): void {
+    const now = this.ctx.currentTime;
     if (active) {
-      this.musicDuckGain.gain.setTargetAtTime(1 - this.duckAmount, this.ctx.currentTime, 0.02);
+      const target = 1 - this.duckAmount;
+      this.musicDuckGain.gain.setTargetAtTime(target, now, 0.02);
+      this.sysDuckGain.gain.setTargetAtTime(target, now, 0.02);
     } else {
-      this.musicDuckGain.gain.setTargetAtTime(1, this.ctx.currentTime, 0.1);
+      this.musicDuckGain.gain.setTargetAtTime(1, now, 0.1);
+      this.sysDuckGain.gain.setTargetAtTime(1, now, 0.1);
     }
   }
 
@@ -439,13 +456,12 @@ export class AudioEngine {
 
       if (nextState !== currentState) {
         currentState = nextState;
-        const param = this.musicDuckGain.gain;
-        param.cancelScheduledValues(now);
-        param.setValueAtTime(param.value, now);
-        if (nextState === 'ducked') {
-          param.linearRampToValueAtTime(1 - this.duckAmount, now + 0.03);
-        } else {
-          param.linearRampToValueAtTime(1, now + 0.15);
+        const target = nextState === 'ducked' ? 1 - this.duckAmount : 1;
+        const rampTime = nextState === 'ducked' ? now + 0.03 : now + 0.15;
+        for (const param of [this.musicDuckGain.gain, this.sysDuckGain.gain]) {
+          param.cancelScheduledValues(now);
+          param.setValueAtTime(param.value, now);
+          param.linearRampToValueAtTime(target, rampTime);
         }
       }
     };
@@ -561,6 +577,35 @@ export class AudioEngine {
     makeBeep(now + 0.14);
   }
 
+  /** Two-tone ascending chirp (listener joined). Not mixed into the stream. */
+  playListenerUpBeep(): void {
+    this.playTwoToneBeep(520, 780);
+  }
+
+  /** Two-tone descending chirp (listener left). Not mixed into the stream. */
+  playListenerDownBeep(): void {
+    this.playTwoToneBeep(780, 520);
+  }
+
+  private playTwoToneBeep(freqA: number, freqB: number): void {
+    if (!this.ctx) return;
+    const now = this.ctx.currentTime;
+    const g = this.ctx.createGain();
+    g.gain.setValueAtTime(0, now);
+    g.gain.linearRampToValueAtTime(0.35, now + 0.01);
+    g.gain.setValueAtTime(0.35, now + 0.14);
+    g.gain.linearRampToValueAtTime(0, now + 0.18);
+    g.connect(this.ctx.destination);
+
+    const osc = this.ctx.createOscillator();
+    osc.type = 'sine';
+    osc.frequency.setValueAtTime(freqA, now);
+    osc.frequency.setValueAtTime(freqB, now + 0.08);
+    osc.connect(g);
+    osc.start(now);
+    osc.stop(now + 0.2);
+  }
+
   /** Plays a continuous 1-second beep on the broadcaster's speakers only.
    *  Routed to ctx.destination, so it is NOT mixed into the stream. */
   playDisconnectBeep(): void {
@@ -602,8 +647,8 @@ export class AudioEngine {
     cancelAnimationFrame(this.duckRafId);
     this.setCaptureActive(false);
     this.stopMusicInternal();
+    this.detachAllSysSources();
     this.micStream?.getTracks().forEach((t) => t.stop());
-    this.sysStream?.getTracks().forEach((t) => t.stop());
     this.ctx.close();
   }
 }

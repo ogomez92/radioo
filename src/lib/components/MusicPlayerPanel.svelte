@@ -14,11 +14,12 @@
     onAnnounceProgress: () => void;
   } = $props();
 
-  function handleVolume(e: Event) {
-    const v = parseInt((e.target as HTMLInputElement).value, 10);
-    store.musicVolume = v;
-    onVolumeChange(v);
-  }
+  // bind:value on a range input hands Svelte the parseFloat, but we persist
+  // the integer form. Mirror into the engine from $effect so every slider
+  // write — including programmatic — reaches the audio graph.
+  $effect(() => {
+    onVolumeChange(store.musicVolume);
+  });
 </script>
 
 <section class="panel" aria-labelledby="music-heading">
@@ -69,8 +70,7 @@
       min="0"
       max="100"
       step="1"
-      value={store.musicVolume}
-      oninput={handleVolume}
+      bind:value={store.musicVolume}
       aria-label={i18n.t('music.volumeAria')}
     />
     <span class="text-sm text-muted" style="min-width: 36px">{store.musicVolume}%</span>

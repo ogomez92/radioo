@@ -1,36 +1,26 @@
 import { app, ipcMain, dialog, type BrowserWindow } from 'electron';
 import { Encoder, HlsEncoder, type EncoderConfig } from './encoder';
 import { IcecastClient, type IcecastConfig } from './icecast';
+import { ProcCaptureManager, findScreenReaderPid, type CaptureMode } from './proc-capture';
+import { pollListeners, resolvePollUrl } from './listener-poll';
 import * as fs from 'fs';
 import * as path from 'path';
-import * as https from 'https';
-import * as http from 'http';
-
-function fetchJson(url: string): Promise<unknown> {
-  return new Promise((resolve, reject) => {
-    const client = url.startsWith('https') ? https : http;
-    const req = client.get(url, { timeout: 5000 }, (res) => {
-      let data = '';
-      res.on('data', (chunk: Buffer) => { data += chunk; });
-      res.on('end', () => {
-        try { resolve(JSON.parse(data)); }
-        catch { reject(new Error('Invalid JSON from server')); }
-      });
-    });
-    req.on('error', reject);
-    req.on('timeout', () => { req.destroy(); reject(new Error('Timeout')); });
-  });
-}
 
 export function setupIpcHandlers(mainWindow: BrowserWindow): () => void {
   const encoder = new Encoder();
   const hlsEncoder = new HlsEncoder();
   const icecast = new IcecastClient();
+  const procCapture = new ProcCaptureManager(mainWindow);
   let recordingStream: fs.WriteStream | null = null;
   let startTime = 0;
   let durationTimer: ReturnType<typeof setInterval> | null = null;
   let listenerTimer: ReturnType<typeof setInterval> | null = null;
   let currentIcecastUrl = '';
+
+  // Watchdog for renderer → main PCM flow. Gaps > 200 ms while the encoder is
+  // running point at audio-thread overload, which manifests as stream crackle.
+  let lastAudioDataAt = 0;
+  let lastAudioPayload = 0;
 
   function sendStatus(update: Record<string, unknown>): void {
     if (!mainWindow.isDestroyed()) {
@@ -40,8 +30,10 @@ export function setupIpcHandlers(mainWindow: BrowserWindow): () => void {
 
   // Encoder
   ipcMain.handle('encoder:start', (_ev, config: EncoderConfig) => {
+    console.log('[encoder] start', JSON.stringify(config));
     encoder.start(config);
     startTime = Date.now();
+    lastAudioDataAt = 0;
     durationTimer = setInterval(() => {
       sendStatus({ duration: Math.floor((Date.now() - startTime) / 1000) });
     }, 1000);
@@ -49,14 +41,42 @@ export function setupIpcHandlers(mainWindow: BrowserWindow): () => void {
   });
 
   ipcMain.handle('encoder:stop', () => {
+    console.log('[encoder] stop');
     encoder.stop();
     if (durationTimer) { clearInterval(durationTimer); durationTimer = null; }
     startTime = 0;
+    lastAudioDataAt = 0;
     sendStatus({ duration: 0 });
     return true;
   });
 
+  // Periodic peak sampling of outgoing PCM, so we can see whether the
+  // renderer is actually mixing any audio into the stream. Throttled to
+  // once per second to avoid spam.
+  let lastPeakLogAt = 0;
   ipcMain.on('audio:data', (_ev, buffer: ArrayBuffer) => {
+    const now = Date.now();
+    if (lastAudioDataAt !== 0 && now - lastAudioDataAt > 200) {
+      console.warn(
+        '[audio] renderer gap %d ms (prev payload %d bytes)',
+        now - lastAudioDataAt,
+        lastAudioPayload,
+      );
+    }
+    lastAudioDataAt = now;
+    lastAudioPayload = buffer.byteLength;
+
+    if (now - lastPeakLogAt > 1000) {
+      let peak = 0;
+      const floats = new Float32Array(buffer);
+      for (let i = 0; i < floats.length; i++) {
+        const a = Math.abs(floats[i]);
+        if (a > peak) peak = a;
+      }
+      console.log('[audio] out peak=%f (%d samples)', peak.toFixed(4), floats.length);
+      lastPeakLogAt = now;
+    }
+
     const pcm = Buffer.from(buffer);
     encoder.write(pcm);
     hlsEncoder.write(pcm);
@@ -65,6 +85,16 @@ export function setupIpcHandlers(mainWindow: BrowserWindow): () => void {
   encoder.on('data', (data: Buffer) => {
     icecast.send(data);
     recordingStream?.write(data);
+  });
+
+  encoder.on('log', (line: string) => {
+    // ffmpeg warnings/errors — these usually indicate clipping, buffer
+    // underrun, or encoding hiccups, all of which manifest as crackling.
+    console.log('[ffmpeg]', line);
+  });
+
+  encoder.on('close', (code: number | null) => {
+    console.log('[encoder] ffmpeg exited code=%s', code);
   });
 
   encoder.on('error', (err: NodeJS.ErrnoException) => {
@@ -91,19 +121,22 @@ export function setupIpcHandlers(mainWindow: BrowserWindow): () => void {
   });
 
   // Icecast
-  ipcMain.handle('icecast:connect', async (_ev, config: IcecastConfig) => {
-    try {
-      await icecast.connect(config);
-      currentIcecastUrl = config.url;
-      sendStatus({ connected: true, streaming: true, error: null });
-      startListenerPolling(config.url);
-      return { success: true };
-    } catch (err: unknown) {
-      const msg = err instanceof Error ? err.message : String(err);
-      sendStatus({ connected: false, error: msg });
-      return { success: false, error: msg };
-    }
-  });
+  ipcMain.handle(
+    'icecast:connect',
+    async (_ev, config: IcecastConfig & { listenerCountUrl?: string }) => {
+      try {
+        await icecast.connect(config);
+        currentIcecastUrl = config.url;
+        sendStatus({ connected: true, streaming: true, error: null });
+        startListenerPolling(resolvePollUrl(config.url, config.listenerCountUrl));
+        return { success: true };
+      } catch (err: unknown) {
+        const msg = err instanceof Error ? err.message : String(err);
+        sendStatus({ connected: false, error: msg });
+        return { success: false, error: msg };
+      }
+    },
+  );
 
   ipcMain.handle('icecast:disconnect', () => {
     icecast.disconnect();
@@ -149,40 +182,36 @@ export function setupIpcHandlers(mainWindow: BrowserWindow): () => void {
 
   // Listener count
   ipcMain.handle('listeners:get', async (_ev, serverUrl: string) => {
-    return pollListeners(serverUrl);
+    const { count } = await pollListeners(serverUrl);
+    return count;
   });
+
+  // Increments on every start/stop. An in-flight poll compares the generation
+  // it captured at tick-start against the live value; if they differ, it
+  // drops its status update. Otherwise a slow tick can overwrite the `0` sent
+  // by disconnectIcecast and leave the UI showing stale listener counts.
+  let pollGeneration = 0;
 
   function startListenerPolling(serverUrl: string): void {
     stopListenerPolling();
-    listenerTimer = setInterval(async () => {
-      const count = await pollListeners(serverUrl);
-      sendStatus({ listeners: count });
-    }, 10000);
+    pollGeneration += 1;
+    const gen = pollGeneration;
+    const tick = async () => {
+      const result = await pollListeners(serverUrl);
+      if (gen !== pollGeneration) return;
+      if (result.error) {
+        sendStatus({ listenersError: result.error, listeners: -1 });
+      } else {
+        sendStatus({ listeners: result.count, listenersError: null });
+      }
+    };
+    tick();
+    listenerTimer = setInterval(tick, 5000);
   }
 
   function stopListenerPolling(): void {
+    pollGeneration += 1;
     if (listenerTimer) { clearInterval(listenerTimer); listenerTimer = null; }
-  }
-
-  async function pollListeners(serverUrl: string): Promise<number> {
-    try {
-      const parsed = new URL(serverUrl);
-      const statusUrl = `${parsed.protocol}//${parsed.host}/status-json.xsl`;
-      const mount = parsed.pathname;
-
-      const data = await fetchJson(statusUrl) as Record<string, unknown>;
-      const icestats = data?.icestats as Record<string, unknown> | undefined;
-      if (!icestats) return -1;
-
-      const rawSource = icestats.source;
-      const sources = Array.isArray(rawSource) ? rawSource : rawSource ? [rawSource] : [];
-      const source = sources.find((s: Record<string, unknown>) =>
-        typeof s.listenurl === 'string' && s.listenurl.endsWith(mount)
-      );
-      return typeof source?.listeners === 'number' ? source.listeners : 0;
-    } catch {
-      return -1;
-    }
   }
 
   // File dialogs
@@ -232,11 +261,23 @@ export function setupIpcHandlers(mainWindow: BrowserWindow): () => void {
     ev.returnValue = writeSettings(settings);
   });
 
+  // Per-process capture
+  ipcMain.handle('syscap:supported', () => procCapture.isSupported);
+  ipcMain.handle('syscap:list', () => procCapture.listSessions());
+  ipcMain.handle(
+    'syscap:set-targets',
+    (_ev, payload: { mode: CaptureMode; pids: number[] }) =>
+      procCapture.setTargets(payload.mode, payload.pids ?? []),
+  );
+  ipcMain.handle('syscap:stop', () => { procCapture.stopAll(); });
+  ipcMain.handle('syscap:screen-reader-pid', () => findScreenReaderPid());
+
   // Cleanup function for graceful shutdown
   return function cleanup(): void {
     icecast.disconnect();
     encoder.stop();
     hlsEncoder.stop();
+    procCapture.stopAll();
     if (recordingStream) {
       recordingStream.end();
       recordingStream = null;
