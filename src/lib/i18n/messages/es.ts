@@ -2,7 +2,7 @@ import type { Messages } from './en';
 
 export const es: Messages = {
   app: { title: 'Radioo', live: 'EN VIVO', language: 'Idioma' },
-  tabs: { main: 'Principal', server: 'Servidor', recording: 'Grabación', effects: 'Efectos', settings: 'Ajustes' },
+  tabs: { main: 'Principal', server: 'Servidor', recording: 'Grabación', effects: 'Efectos', settings: 'Ajustes', help: 'Ayuda' },
   settings: {
     heading: 'Ajustes',
     language: 'Idioma',
@@ -201,4 +201,33 @@ export const es: Messages = {
   },
   languages: { en: 'English', es: 'Español', fr: 'Français', it: 'Italiano', pt: 'Português', de: 'Deutsch', ja: '日本語' },
   combobox: { selectLanguage: 'Seleccionar idioma' },
+  help: {
+    heading: 'Ayuda',
+    gettingStartedHeading: 'Primeros pasos',
+    gettingStartedBody: 'Elige un micrófono en Fuentes de Audio. Abre la pestaña Servidor para introducir la URL de Icecast, el usuario y la contraseña. Pulsa Iniciar Stream o Ctrl+S para salir en directo. Si quieres, activa la captura de audio del sistema para incluir el sonido de juegos, música o el navegador en la transmisión.',
+    sourcesHeading: 'Captura de audio del sistema',
+    sourcesBody: 'La captura de audio del sistema tiene tres modos. "Capturar audio del sistema" toma todo lo que se esté reproduciendo, excepto Radioo. "Sólo estos procesos" captura únicamente las aplicaciones que elijas. "Todo excepto estos" captura el sistema menos una aplicación — útil para silenciar un lector de pantalla mientras transmites música o un juego.',
+    pickerKeysHeading: 'Teclas del selector de procesos',
+    pickerKeysBody: 'Usa las flechas arriba y abajo para moverte por la lista. Inicio y Fin saltan al primer y al último elemento. Espacio alterna la selección. Intro aplica y cierra el diálogo. Escape cancela.',
+    shortcutsHeading: 'Atajos de teclado',
+    globalLegend: 'Los atajos marcados con ★ funcionan incluso cuando Radioo no está enfocado.',
+    colShortcut: 'Atajo',
+    colAction: 'Acción',
+    shortcuts: {
+      micMute: 'Silenciar/activar micrófono',
+      sysMute: 'Activar/desactivar audio del sistema',
+      duck: 'Activar/desactivar auto-ducking',
+      duckHold: 'Ducking momentáneo (mantener)',
+      stream: 'Iniciar o detener la transmisión',
+      record: 'Iniciar o detener la grabación',
+      openMusic: 'Abrir un archivo de música',
+      playMusic: 'Reproducir o pausar la música',
+      volUp: 'Subir volumen de música (+5%)',
+      volDown: 'Bajar volumen de música (−5%)',
+      musicProgress: 'Anunciar progreso de la música',
+      micStatus: 'Anunciar estado del micrófono',
+      listeners: 'Anunciar número de oyentes',
+      toggleScreenReader: 'Alternar lector de pantalla en la lista de captura',
+    },
+  },
 };

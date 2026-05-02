@@ -2,7 +2,7 @@ import type { Messages } from './en';
 
 export const de: Messages = {
   app: { title: 'Radioo', live: 'LIVE', language: 'Sprache' },
-  tabs: { main: 'Haupt', server: 'Server', recording: 'Aufnahme', effects: 'Effekte', settings: 'Einstellungen' },
+  tabs: { main: 'Haupt', server: 'Server', recording: 'Aufnahme', effects: 'Effekte', settings: 'Einstellungen', help: 'Hilfe' },
   settings: {
     heading: 'Einstellungen',
     language: 'Sprache',
@@ -201,4 +201,33 @@ export const de: Messages = {
   },
   languages: { en: 'English', es: 'Español', fr: 'Français', it: 'Italiano', pt: 'Português', de: 'Deutsch', ja: '日本語' },
   combobox: { selectLanguage: 'Sprache auswählen' },
+  help: {
+    heading: 'Hilfe',
+    gettingStartedHeading: 'Erste Schritte',
+    gettingStartedBody: 'Wähle ein Mikrofon unter Audioquellen. Öffne den Server-Tab, um Icecast-URL, Benutzername und Passwort einzugeben. Drücke "Stream starten" oder Strg+S, um live zu gehen. Optional kannst du die Systemaudio-Aufnahme aktivieren, um den Ton von Spielen, Musik oder Browser in die Übertragung einzubeziehen.',
+    sourcesHeading: 'Systemaudio-Aufnahme',
+    sourcesBody: 'Die Systemaudio-Aufnahme bietet drei Modi. "Systemaudio aufnehmen" erfasst alles, was gerade abgespielt wird, außer Radioo selbst. "Nur diese Prozesse" nimmt nur die ausgewählten Anwendungen auf. "Alles außer diesen" nimmt das System ohne eine bestimmte Anwendung auf — nützlich, um einen Screenreader stumm zu schalten, während Musik oder ein Spiel übertragen werden.',
+    pickerKeysHeading: 'Tasten im Prozess-Dialog',
+    pickerKeysBody: 'Nutze Pfeil hoch/runter zum Navigieren. Pos1 und Ende springen zum ersten bzw. letzten Eintrag. Leertaste schaltet die Auswahl um. Enter übernimmt und schließt. Escape bricht ab.',
+    shortcutsHeading: 'Tastenkürzel',
+    globalLegend: 'Mit ★ markierte Kürzel funktionieren auch, wenn Radioo nicht fokussiert ist.',
+    colShortcut: 'Kürzel',
+    colAction: 'Aktion',
+    shortcuts: {
+      micMute: 'Mikrofon stumm/aktiv',
+      sysMute: 'Systemaudio ein/aus',
+      duck: 'Auto-Ducking ein/aus',
+      duckHold: 'Kurzzeitiges Ducking (halten)',
+      stream: 'Stream starten oder stoppen',
+      record: 'Aufnahme starten oder stoppen',
+      openMusic: 'Musikdatei öffnen',
+      playMusic: 'Musik abspielen oder pausieren',
+      volUp: 'Musiklautstärke erhöhen (+5%)',
+      volDown: 'Musiklautstärke verringern (−5%)',
+      musicProgress: 'Musikfortschritt ansagen',
+      micStatus: 'Mikrofonstatus ansagen',
+      listeners: 'Hörerzahl ansagen',
+      toggleScreenReader: 'Screenreader in der Aufnahmeliste umschalten',
+    },
+  },
 };

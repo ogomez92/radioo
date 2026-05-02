@@ -2,7 +2,7 @@ import type { Messages } from './en';
 
 export const pt: Messages = {
   app: { title: 'Radioo', live: 'AO VIVO', language: 'Idioma' },
-  tabs: { main: 'Principal', server: 'Servidor', recording: 'Gravação', effects: 'Efeitos', settings: 'Configurações' },
+  tabs: { main: 'Principal', server: 'Servidor', recording: 'Gravação', effects: 'Efeitos', settings: 'Configurações', help: 'Ajuda' },
   settings: {
     heading: 'Configurações',
     language: 'Idioma',
@@ -201,4 +201,33 @@ export const pt: Messages = {
   },
   languages: { en: 'English', es: 'Español', fr: 'Français', it: 'Italiano', pt: 'Português', de: 'Deutsch', ja: '日本語' },
   combobox: { selectLanguage: 'Selecionar idioma' },
+  help: {
+    heading: 'Ajuda',
+    gettingStartedHeading: 'Primeiros passos',
+    gettingStartedBody: 'Escolha um microfone em Fontes de Áudio. Abra a aba Servidor para inserir a URL do Icecast, o usuário e a senha. Pressione Iniciar Transmissão ou Ctrl+S para entrar ao vivo. Se quiser, ative a captura de áudio do sistema para incluir o som de jogos, música ou navegador na transmissão.',
+    sourcesHeading: 'Captura de áudio do sistema',
+    sourcesBody: 'A captura de áudio do sistema tem três modos. "Capturar áudio do sistema" pega tudo o que está tocando, exceto o Radioo. "Somente estes processos" captura apenas os aplicativos que você escolher. "Tudo exceto estes" captura o sistema menos um aplicativo — útil para silenciar um leitor de tela enquanto transmite música ou um jogo.',
+    pickerKeysHeading: 'Teclas do seletor de processos',
+    pickerKeysBody: 'Use as setas para cima e para baixo para percorrer a lista. Home e End saltam para o primeiro e o último item. Espaço alterna a seleção. Enter aplica e fecha. Esc cancela.',
+    shortcutsHeading: 'Atalhos de teclado',
+    globalLegend: 'Atalhos marcados com ★ funcionam mesmo quando o Radioo não está em foco.',
+    colShortcut: 'Atalho',
+    colAction: 'Ação',
+    shortcuts: {
+      micMute: 'Mutar/desmutar microfone',
+      sysMute: 'Ativar/desativar áudio do sistema',
+      duck: 'Ativar/desativar auto-ducking',
+      duckHold: 'Ducking momentâneo (segure)',
+      stream: 'Iniciar ou parar a transmissão',
+      record: 'Iniciar ou parar a gravação',
+      openMusic: 'Abrir um arquivo de música',
+      playMusic: 'Reproduzir ou pausar a música',
+      volUp: 'Aumentar volume da música (+5%)',
+      volDown: 'Diminuir volume da música (−5%)',
+      musicProgress: 'Anunciar progresso da música',
+      micStatus: 'Anunciar estado do microfone',
+      listeners: 'Anunciar número de ouvintes',
+      toggleScreenReader: 'Alternar leitor de tela na lista de captura',
+    },
+  },
 };

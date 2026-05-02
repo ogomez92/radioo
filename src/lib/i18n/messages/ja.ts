@@ -2,7 +2,7 @@ import type { Messages } from './en';
 
 export const ja: Messages = {
   app: { title: 'Radioo', live: 'ライブ', language: '言語' },
-  tabs: { main: 'メイン', server: 'サーバー', recording: '録音', effects: 'エフェクト', settings: '設定' },
+  tabs: { main: 'メイン', server: 'サーバー', recording: '録音', effects: 'エフェクト', settings: '設定', help: 'ヘルプ' },
   settings: {
     heading: '設定',
     language: '言語',
@@ -201,4 +201,33 @@ export const ja: Messages = {
   },
   languages: { en: 'English', es: 'Español', fr: 'Français', it: 'Italiano', pt: 'Português', de: 'Deutsch', ja: '日本語' },
   combobox: { selectLanguage: '言語を選択' },
+  help: {
+    heading: 'ヘルプ',
+    gettingStartedHeading: 'はじめに',
+    gettingStartedBody: '「オーディオソース」でマイクを選び、「サーバー」タブで Icecast の URL、ユーザー名、パスワードを入力してください。「ストリーム開始」または Ctrl+S でライブ配信が始まります。必要に応じてシステム音声キャプチャを有効にすると、ゲーム、音楽、ブラウザーの音を配信に含められます。',
+    sourcesHeading: 'システム音声のキャプチャ',
+    sourcesBody: 'システム音声のキャプチャには 3 つのモードがあります。「システム音声をキャプチャ」は Radioo 以外の再生音をすべて取り込みます。「指定したプロセスのみ」は選んだアプリだけを取り込みます。「指定したプロセス以外」は 1 つのアプリを除外して取り込みます（スクリーンリーダーを消音しつつ音楽やゲームを配信するのに便利です）。',
+    pickerKeysHeading: 'プロセス選択ダイアログのキー操作',
+    pickerKeysBody: '上下矢印でリストを移動できます。Home と End で最初と最後の項目にジャンプします。Space で選択を切り替え、Enter で適用して閉じ、Escape でキャンセルします。',
+    shortcutsHeading: 'キーボードショートカット',
+    globalLegend: '★ 付きのショートカットは Radioo がフォーカスされていなくても動作します。',
+    colShortcut: 'ショートカット',
+    colAction: '操作',
+    shortcuts: {
+      micMute: 'マイクのミュート切替',
+      sysMute: 'システム音声のオン/オフ',
+      duck: '自動ダッキングの切替',
+      duckHold: '一時ダッキング（押している間）',
+      stream: 'ストリームの開始/停止',
+      record: '録音の開始/停止',
+      openMusic: '音楽ファイルを開く',
+      playMusic: '音楽の再生/一時停止',
+      volUp: '音楽の音量を上げる (+5%)',
+      volDown: '音楽の音量を下げる (−5%)',
+      musicProgress: '音楽の進捗をアナウンス',
+      micStatus: 'マイクの状態をアナウンス',
+      listeners: 'リスナー数をアナウンス',
+      toggleScreenReader: 'キャプチャリストのスクリーンリーダーを切替',
+    },
+  },
 };

@@ -2,7 +2,7 @@ import type { Messages } from './en';
 
 export const it: Messages = {
   app: { title: 'Radioo', live: 'IN DIRETTA', language: 'Lingua' },
-  tabs: { main: 'Principale', server: 'Server', recording: 'Registrazione', effects: 'Effetti', settings: 'Impostazioni' },
+  tabs: { main: 'Principale', server: 'Server', recording: 'Registrazione', effects: 'Effetti', settings: 'Impostazioni', help: 'Aiuto' },
   settings: {
     heading: 'Impostazioni',
     language: 'Lingua',
@@ -201,4 +201,33 @@ export const it: Messages = {
   },
   languages: { en: 'English', es: 'Español', fr: 'Français', it: 'Italiano', pt: 'Português', de: 'Deutsch', ja: '日本語' },
   combobox: { selectLanguage: 'Seleziona lingua' },
+  help: {
+    heading: 'Aiuto',
+    gettingStartedHeading: 'Per iniziare',
+    gettingStartedBody: 'Scegli un microfono in Sorgenti Audio. Apri la scheda Server per inserire l\'URL Icecast, il nome utente e la password. Premi Avvia Stream o Ctrl+S per andare in onda. Se vuoi, attiva la cattura audio di sistema per includere il suono di giochi, musica o browser nella trasmissione.',
+    sourcesHeading: 'Cattura audio di sistema',
+    sourcesBody: 'La cattura audio di sistema ha tre modalità. "Cattura audio di sistema" prende tutto ciò che è in riproduzione, tranne Radioo stesso. "Solo questi processi" cattura solo le applicazioni che scegli. "Tutto tranne questi" cattura il sistema meno un\'applicazione — utile per silenziare uno screen reader mentre trasmetti musica o un gioco.',
+    pickerKeysHeading: 'Tasti del selettore di processi',
+    pickerKeysBody: 'Usa le frecce Su e Giù per scorrere l\'elenco. Home e Fine saltano al primo e all\'ultimo elemento. Spazio alterna la selezione. Invio applica e chiude. Esc annulla.',
+    shortcutsHeading: 'Scorciatoie da tastiera',
+    globalLegend: 'Le scorciatoie contrassegnate con ★ funzionano anche quando Radioo non è in primo piano.',
+    colShortcut: 'Scorciatoia',
+    colAction: 'Azione',
+    shortcuts: {
+      micMute: 'Attiva/disattiva microfono',
+      sysMute: 'Attiva/disattiva audio di sistema',
+      duck: 'Attiva/disattiva auto-ducking',
+      duckHold: 'Ducking momentaneo (tieni premuto)',
+      stream: 'Avvia o ferma la trasmissione',
+      record: 'Avvia o ferma la registrazione',
+      openMusic: 'Apri un file musicale',
+      playMusic: 'Riproduci o metti in pausa la musica',
+      volUp: 'Alza volume musica (+5%)',
+      volDown: 'Abbassa volume musica (−5%)',
+      musicProgress: 'Annuncia progresso della musica',
+      micStatus: 'Annuncia stato del microfono',
+      listeners: 'Annuncia numero di ascoltatori',
+      toggleScreenReader: 'Attiva lo screen reader nella lista di cattura',
+    },
+  },
 };

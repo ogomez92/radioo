@@ -1,6 +1,6 @@
 export const en = {
   app: { title: 'Radioo', live: 'LIVE', language: 'Language' },
-  tabs: { main: 'Main', server: 'Server', recording: 'Recording', effects: 'Effects', settings: 'Settings' },
+  tabs: { main: 'Main', server: 'Server', recording: 'Recording', effects: 'Effects', settings: 'Settings', help: 'Help' },
   settings: {
     heading: 'Settings',
     language: 'Language',
@@ -213,6 +213,35 @@ export const en = {
     ja: '日本語',
   },
   combobox: { selectLanguage: 'Select language' },
+  help: {
+    heading: 'Help',
+    gettingStartedHeading: 'Getting started',
+    gettingStartedBody: 'Pick a microphone in Audio Sources. Open the Server tab to enter your Icecast URL, username, and password. Press Start Stream or Ctrl+S to go live. Optionally enable system audio capture to include game, music, or browser audio in the broadcast.',
+    sourcesHeading: 'Capturing system audio',
+    sourcesBody: 'System audio capture has three modes. "Capture system audio" grabs everything that is playing, except Radioo itself. "Only these processes" captures only the apps you pick. "Everything except these" captures the system minus one app — useful for silencing a screen reader while still broadcasting music or a game.',
+    pickerKeysHeading: 'Process picker keys',
+    pickerKeysBody: 'Use the Up and Down arrows to move through the process list. Home and End jump to the first and last entries. Space toggles selection. Enter applies and closes the dialog. Escape cancels.',
+    shortcutsHeading: 'Keyboard shortcuts',
+    globalLegend: 'Shortcuts marked ★ work even when Radioo is not focused.',
+    colShortcut: 'Shortcut',
+    colAction: 'Action',
+    shortcuts: {
+      micMute: 'Toggle mic mute',
+      sysMute: 'Toggle system audio on/off',
+      duck: 'Toggle auto-ducking',
+      duckHold: 'Momentary duck (hold to activate)',
+      stream: 'Start or stop streaming',
+      record: 'Start or stop recording',
+      openMusic: 'Open a music file',
+      playMusic: 'Play or pause music',
+      volUp: 'Music volume up (+5%)',
+      volDown: 'Music volume down (−5%)',
+      musicProgress: 'Announce music progress',
+      micStatus: 'Announce current mic status',
+      listeners: 'Announce listener count',
+      toggleScreenReader: 'Toggle screen reader in capture list',
+    },
+  },
 };
 
 export type Messages = typeof en;

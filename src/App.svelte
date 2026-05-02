@@ -12,6 +12,7 @@
   import RecordingPanel from './lib/components/RecordingPanel.svelte';
   import StatusBar from './lib/components/StatusBar.svelte';
   import SettingsPanel from './lib/components/SettingsPanel.svelte';
+  import HelpPanel from './lib/components/HelpPanel.svelte';
   import './app.css';
 
   let engine: AudioEngine | null = null;
@@ -32,7 +33,7 @@
     wasConnected = connected;
   });
 
-  type TabId = 'main' | 'server' | 'recording' | 'effects' | 'settings';
+  type TabId = 'main' | 'server' | 'recording' | 'effects' | 'settings' | 'help';
   let activeTab = $state<TabId>('main');
 
   const tabs = $derived<{ id: TabId; label: string }[]>([
@@ -41,6 +42,7 @@
     { id: 'recording', label: i18n.t('tabs.recording') },
     { id: 'effects', label: i18n.t('tabs.effects') },
     { id: 'settings', label: i18n.t('tabs.settings') },
+    { id: 'help', label: i18n.t('tabs.help') },
   ]);
 
   function handleTabKeydown(e: KeyboardEvent) {
@@ -254,6 +256,9 @@
     } else if (e.ctrlKey && e.shiftKey && (e.key === 'R' || e.key === 'r')) {
       e.preventDefault();
       announceMusicProgress();
+    } else if (e.ctrlKey && e.shiftKey && (e.key === 'C' || e.key === 'c')) {
+      e.preventDefault();
+      announceMicStatus();
     } else if (e.ctrlKey && (e.key === 'l' || e.key === 'L')) {
       e.preventDefault();
       announceListenerCount();
@@ -702,8 +707,9 @@
     }
   });
 
-  // Mic silence detection — announce after ~3s of continuous silence,
-  // and again when audio returns. Level threshold is linear amplitude.
+  // Mic silence detection — track whether the mic has been silent for ~3s
+  // so the user can query the current state with Ctrl+Shift+C. We no longer
+  // auto-announce on every transition: it was too chatty during pauses.
   const SILENCE_THRESHOLD = 0.005;
   const SILENCE_DELAY_MS = 3000;
   let micSilent = false;
@@ -721,17 +727,25 @@
         silenceTimer = setTimeout(() => {
           micSilent = true;
           silenceTimer = null;
-          announce(i18n.t('announce.noMicInput'));
         }, SILENCE_DELAY_MS);
       }
     } else {
       if (silenceTimer) { clearTimeout(silenceTimer); silenceTimer = null; }
-      if (micSilent) {
-        micSilent = false;
-        announce(i18n.t('announce.micInputDetected'));
-      }
+      micSilent = false;
     }
   });
+
+  function announceMicStatus(): void {
+    if (!store.micDeviceId) {
+      announce(i18n.t('announce.noMicInput'));
+      return;
+    }
+    if (store.micMuted) {
+      announce(i18n.t('announce.micMuted'));
+      return;
+    }
+    announce(micSilent ? i18n.t('announce.noMicInput') : i18n.t('announce.micInputDetected'));
+  }
 
   let saveDebounce: ReturnType<typeof setTimeout> | null = null;
   $effect(() => {
@@ -914,6 +928,16 @@
     hidden={activeTab !== 'settings'}
   >
     <SettingsPanel />
+  </div>
+
+  <div
+    id="panel-help"
+    role="tabpanel"
+    aria-labelledby="tab-help"
+    class="tab-panel"
+    hidden={activeTab !== 'help'}
+  >
+    <HelpPanel />
   </div>
 
   <div class="sr-only" role="status" aria-live="assertive" aria-atomic="true">
