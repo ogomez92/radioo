@@ -1,0 +1,80 @@
+name: Release Windows
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build-windows:
+    runs-on: windows-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 11
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - name: Setup Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Cache Rust build
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: native/proc-audio-capture
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      # ffmpeg.exe is gitignored but bundled into the app via electron-builder
+      # extraResources (resources/ffmpeg). Fetch a static build for the package.
+      - name: Bundle ffmpeg
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $url = 'https://github.com/BtbN/FFmpeg-Builds/releases/latest/download/ffmpeg-master-latest-win64-gpl.zip'
+          $zip = Join-Path $env:RUNNER_TEMP 'ffmpeg.zip'
+          $extract = Join-Path $env:RUNNER_TEMP 'ffmpeg'
+          Write-Host "Downloading ffmpeg from $url"
+          Invoke-WebRequest -Uri $url -OutFile $zip
+          Expand-Archive -Path $zip -DestinationPath $extract -Force
+          $exe = Get-ChildItem -Path $extract -Recurse -Filter 'ffmpeg.exe' | Select-Object -First 1
+          if (-not $exe) { throw 'ffmpeg.exe not found in downloaded archive' }
+          New-Item -ItemType Directory -Force -Path 'resources/ffmpeg' | Out-Null
+          Copy-Item $exe.FullName 'resources/ffmpeg/ffmpeg.exe' -Force
+          Write-Host "Bundled $($exe.FullName) -> resources/ffmpeg/ffmpeg.exe"
+
+      # Mirrors `pnpm dist:win` (build:sidecar -> vite build -> electron-builder --win),
+      # but pins --publish never so electron-builder never auto-publishes; the release
+      # below owns publishing.
+      - name: Build Windows distributable
+        run: |
+          pnpm build:sidecar
+          pnpm build
+          pnpm exec electron-builder --win --publish never
+
+      - name: Upload build artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: Radioo-win-x64
+          path: release/*.zip
+          if-no-files-found: error
+
+      - name: Publish GitHub Release
+        if: startsWith(github.ref, 'refs/tags/')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: release/*.zip
+          generate_release_notes: true
