@@ -35,9 +35,21 @@ jobs:
         with:
           workspaces: native/proc-audio-capture
 
-      # The onlyBuiltDependencies allowlist in pnpm-workspace.yaml is not
-      # honored on the runner, so pass it inline — this lets electron's
-      # postinstall (fetches the Electron binary) and esbuild's build run.
+      - name: Diagnose pnpm build approval
+        run: |
+          Write-Host "=== pnpm version ==="
+          pnpm --version
+          Write-Host "=== pnpm config list ==="
+          pnpm config list
+          Write-Host "=== workspace file ==="
+          Get-Content pnpm-workspace.yaml
+          Write-Host "=== user npmrc ($env:USERPROFILE\.npmrc) ==="
+          if (Test-Path "$env:USERPROFILE\.npmrc") { Get-Content "$env:USERPROFILE\.npmrc" } else { Write-Host "(none)" }
+          Write-Host "=== global pnpm config dir ==="
+          pnpm config get globalconfig
+          Write-Host "=== onlyBuiltDependencies value ==="
+          pnpm config get onlyBuiltDependencies
+
       - name: Install dependencies
         run: pnpm install --frozen-lockfile "--config.onlyBuiltDependencies[]=electron" "--config.onlyBuiltDependencies[]=esbuild"
 
