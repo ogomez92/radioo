@@ -16,6 +16,12 @@
     "build:sidecar": "cargo build --release --manifest-path native/proc-audio-capture/Cargo.toml && node scripts/copy-sidecar.mjs",
     "dist:win": "pnpm build:sidecar && vite build && electron-builder --win"
   },
+  "pnpm": {
+    "onlyBuiltDependencies": [
+      "electron",
+      "esbuild"
+    ]
+  },
   "devDependencies": {
     "@sveltejs/vite-plugin-svelte": "^5.0.0",
     "@vitest/ui": "^4.1.4",
