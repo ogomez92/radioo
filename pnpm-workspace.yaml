@@ -1,0 +1,6 @@
+# Allow build scripts for these dependencies (pnpm blocks them by default).
+# electron's postinstall fetches the Electron binary; esbuild builds its
+# native binary — both required to package the app.
+onlyBuiltDependencies:
+  - electron
+  - esbuild
