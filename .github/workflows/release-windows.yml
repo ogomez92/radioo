@@ -35,8 +35,11 @@ jobs:
         with:
           workspaces: native/proc-audio-capture
 
+      # The onlyBuiltDependencies allowlist in pnpm-workspace.yaml is not
+      # honored on the runner, so pass it inline — this lets electron's
+      # postinstall (fetches the Electron binary) and esbuild's build run.
       - name: Install dependencies
-        run: pnpm install --frozen-lockfile
+        run: pnpm install --frozen-lockfile "--config.onlyBuiltDependencies[]=electron" "--config.onlyBuiltDependencies[]=esbuild"
 
       # ffmpeg.exe is gitignored but bundled into the app via electron-builder
       # extraResources (resources/ffmpeg). Fetch a static build for the package.
